@@ -4,7 +4,7 @@
 
 ## User:
 
-We've talked a bit about how the g533 Tower that I purchased is potentially a good fit for graphics traction but is not so good for querying and synthesizing responses. You would still agree with that assessment, correct?
+We've talked a bit about how the g533 Tower that I purchased is potentially a good fit for graph extraction but is not so good for querying and synthesizing responses. You would still agree with that assessment, correct?
 
 ## Assistant:
 
