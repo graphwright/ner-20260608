@@ -1,0 +1,19 @@
+[project]
+name = "ner-20260608"
+version = "0.1.0"
+description = "Experimental NER approach for creating graphs"
+authors = [
+    {name = "Will Ware", email = "will.ware@gmail.com"},
+]
+dependencies = ["httpx>=0.28.1", "dotenv>=0.9.9"]
+requires-python = ">=3.14"
+readme = "README.md"
+license = {text = "MIT"}
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+
+[tool.pdm]
+distribution = true
