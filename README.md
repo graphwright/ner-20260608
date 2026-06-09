@@ -331,7 +331,7 @@ Ready to write `triplets.py`?
 
 > 6/9/2026 6:55:10
 
-> File: 
+> [Earlier GH gist on ingestion and schema structure](https://gist.github.com/wware/1ef712eb037b0f95693a6e76d72382ac)
 
 Let me share some notes from that work so you have full context here.
 
