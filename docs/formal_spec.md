@@ -112,7 +112,7 @@ documented in prose on the predicate class.
 Every predicate instance carries a `truth_status` field:
 
 $$
-\text{TruthStatus} ::= \text{asserted\_true} \mid \text{asserted\_false} \mid \text{hypothetical} \mid \text{disputed} \mid \text{retracted}
+\text{TruthStatus} ::= \text{asserted\\_true} \mid \text{asserted\\_false} \mid \text{hypothetical} \mid \text{disputed} \mid \text{retracted}
 $$
 
 Under the closed-world assumption, the presence of a predicate instance does NOT
