@@ -45,7 +45,7 @@ My instinct: plain TSV or JSONL, flat sequential, spaCy for splitting with the `
 
 ## User:
 
-I would think Jason l is the way to go, and I would want to use the LLM itself as a splitter rather than spacey.
+I would think JSONL is the way to go, and I would want to use the LLM itself as a splitter rather than spacey.
 
 ## Assistant:
 
