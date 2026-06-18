@@ -5,7 +5,7 @@ description = "Experimental NER approach for creating graphs"
 authors = [
     {name = "Will Ware", email = "will.ware@gmail.com"},
 ]
-dependencies = ["httpx>=0.28.1", "dotenv>=0.9.9"]
+dependencies = ["httpx>=0.28.1", "dotenv>=0.9.9", "pydantic>=2.0"]
 requires-python = ">=3.14"
 readme = "README.md"
 license = {text = "MIT"}
