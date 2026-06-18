@@ -1,27 +1,89 @@
 # NER-20270608
 
+## Makefile workflow
+
+This repo now includes a top-level `Makefile` for running the pipeline stages in sequence.
+
+### Main targets
+
+```bash
+make sentences
+make coref
+make merge
+make events
+make triplets
+make all
+```
+
+`make all` is equivalent to `make triplets` and runs the pipeline through the final triplet extraction stage.
+
+### Fresh rebuild targets
+
+Some stages use progress dotfiles to support resume behavior. If you want to force a clean rerun of a resumable stage, use:
+
+```bash
+make fresh-events
+make fresh-triplets
+```
+
+### Cleanup targets
+
+```bash
+make clean-events
+make clean-triplets
+make clean-derived
+make clean
+```
+
+`make clean` is an alias for `make clean-derived`.
+
+### Common overrides
+
+The `Makefile` exposes common knobs as variables you can override on the command line:
+
+```bash
+make sentences SENT_GUTENBERG=1
+make coref COREF_CHUNK_SIZE=25 COREF_OVERLAP=5
+make triplets TRIPLETS_CHUNK_SIZE=12 TRIPLETS_EVENT_WINDOW=10
+make all OLLAMA=http://host:11434
+```
+
+Available variables include:
+- `OLLAMA`
+- `EVENTS_OLLAMA`
+- `TRIPLETS_OLLAMA`
+- `SENT_MODEL`
+- `COREF_MODEL`
+- `TRIPLETS_MODEL`
+- `SENT_GUTENBERG`
+- `COREF_CHUNK_SIZE`
+- `COREF_OVERLAP`
+- `TRIPLETS_CHUNK_SIZE`
+- `TRIPLETS_OVERLAP`
+- `TRIPLETS_EVENT_WINDOW`
+
 **Link:** [https://claude.ai/chat/a3eaadb6-09f1-4fdc-b179-04dd0024b254](https://claude.ai/chat/a3eaadb6-09f1-4fdc-b179-04dd0024b254)  
 
 ## User:
 
-We've talked a bit about how the g533 Tower that I purchased is potentially a good fit for graph extraction but is not so good for querying and synthesizing responses. You would still agree with that assessment, correct?
+We've talked a bit about how the g533 Tower that I purchased is potentially a good fit for graph extraction but is not so good for querying and synthesizing responses. You would still agree with that [...]
 
 ## Assistant:
 
-Yes, that assessment holds. The nuance from our conversation was actually more specific than graph extraction — the G533's RX 9060 XT with 16GB VRAM is well-suited for **batch inference workloads like the Graphwright ingestion pipeline** (NER, relationship extraction), where you're repeatedly feeding structured prompts through a model and don't need low latency.
+Yes, that assessment holds. The nuance from our conversation was actually more specific than "graphics traction" — the G533's RX 9060 XT with 16GB VRAM is well-suited for **batch inference workloads[...]
 
 Where it's weaker is **interactive query synthesis** — the orchestrator/synthesizer pattern where you want fast, high-quality multi-hop reasoning over graph results. Two compounding issues:
 
 1. **ROCm vs CUDA** — AMD's ROCm stack still has more friction and occasional performance gaps vs CUDA for inference workloads in Ollama, even with improvements.
-2. **Model quality ceiling** — The models that fit well in 16GB (qwen2.5:14b, qwen2.5-coder:14b) are good but not frontier-class. For complex synthesis over BFS results, you noticed during our gwchat work that smaller models struggle with the reasoning depth needed.
+2. **Model quality ceiling** — The models that fit well in 16GB (qwen2.5:14b, qwen2.5-coder:14b) are good but not frontier-class. For complex synthesis over BFS results, you noticed during our gwcha[...]
 
-The conclusion we landed on was: use the G533 for ingestion (where throughput matters more than latency and quality), and keep frontier cloud models (Claude, GPT-4-class) for query synthesis where reasoning quality is the bottleneck. That still seems like the right division of labor.
+The conclusion we landed on was: use the G533 for ingestion (where throughput matters more than latency and quality), and keep frontier cloud models (Claude, GPT-4-class) for query synthesis where rea[...]
 
 Has something changed that's prompting the question, or are you revisiting the architecture?
 
 ## User:
 
-So let's think about a pipeline design starting with the NER phase where the first thing we do is we take the sentences in a scandal in Bohemia and we number them and put one on each line so that we now have easy reference to the sentence, where it is in the story. And we can use that as a reference for the locations of the things that are mentioned in the story.
+So let's think about a pipeline design starting with the NER phase where the first thing we do is we take the sentences in a scandal in Bohemia and we number them and put one on each line so that we n[...]
 
 ## Assistant:
 
@@ -37,21 +99,21 @@ For NER purposes, flat sequential is almost certainly the right call — you jus
 
 **Practical questions:**
 
-- What's your source text? Plain UTF-8 from Project Gutenberg? That'll have some cleanup needed (chapter headers, the story title line, "THE END" etc.) that you probably want stripped before numbering.
-- Are you using spaCy's sentencizer, NLTK's punkt, or something else for sentence splitting? Conan Doyle's sentences are mostly well-behaved but there are some edge cases (dialogue with attribution, abbreviated titles like "Dr.", "Mr.", "Mrs.") that will trip up naive splitters.
+- What's your source text? Plain UTF-8 from Project Gutenberg? That'll have some cleanup needed (chapter headers, the story title line, "THE END" etc.) that you probably want stripped before numbering[...]
+- Are you using spaCy's sentencizer, NLTK's punkt, or something else for sentence splitting? Conan Doyle's sentences are mostly well-behaved but there are some edge cases (dialogue with attribution, a[...]
 - Do you want the numbered output as a plain text file (one sentence per line, `001\t<sentence>`), a JSON array, or something else? The format affects how you feed it into the NER phase.
 
 My instinct: plain TSV or JSONL, flat sequential, spaCy for splitting with the `en_core_web_sm` sentencizer and a custom abbreviation list for the Doyle-specific cases. What do you have in mind?
 
 ## User:
 
-I would think JSONL is the way to go, and I would want to use the LLM itself as a splitter rather than spacey.
+I would think Jason l is the way to go, and I would want to use the LLM itself as a splitter rather than spacey.
 
 ## Assistant:
 
-Makes sense on both counts. JSONL is the right choice — each line is self-contained, easy to stream, easy to append to or slice. And using the LLM as the splitter sidesteps the abbreviation problem entirely; it understands that "Dr. Watson" isn't a sentence boundary.
+Makes sense on both counts. JSONL is the right choice — each line is self-contained, easy to stream, easy to append to or slice. And using the LLM as the splitter sidesteps the abbreviation problem [...]
 
-The practical question is chunking. You can't feed the whole story to the LLM in one shot and ask for numbered sentences — the output would be enormous and you'd have no reliable way to stitch chunks together with consistent numbering. So the approach would be:
+The practical question is chunking. You can't feed the whole story to the LLM in one shot and ask for numbered sentences — the output would be enormous and you'd have no reliable way to stitch chunk[...]
 
 1. **Split the raw text into paragraphs** (on double newlines) — this is trivial and robust.
 2. **Feed paragraphs to the LLM in batches**, asking it to return JSONL where each object is `{"id": <int>, "text": "<sentence>"}`, with a **carry-in offset** so numbering is continuous across chunks.
@@ -66,7 +128,7 @@ Including `para` is cheap and useful — it lets you reconstruct reading order a
 
 The prompt to the LLM for each batch would be something like:
 
-> Split the following text into individual sentences. Return one JSON object per line with keys `id` (integer, starting at {offset}), `para` (paragraph number, starting at {para_offset}), and `text` (the sentence, verbatim). Do not merge or alter sentences. Do not output anything else.
+> Split the following text into individual sentences. Return one JSON object per line with keys `id` (integer, starting at {offset}), `para` (paragraph number, starting at {para_offset}), and `text` ([...]
 
 The "verbatim" instruction matters — you don't want the model normalizing quotes or fixing Doyle's punctuation.
 
@@ -97,17 +159,17 @@ python sentencize.py \
   --model qwen2.5:14b
 ```
 
-The one thing I'd watch for: `qwen2.5:14b` is generally well-behaved about following JSON-only instructions, but you may get occasional off-by-one errors in the `id` field (model resets to 1 mid-batch). The resume logic handles that for cross-batch continuity, but you might want a post-processing pass to re-sequence IDs from the final JSONL if strict monotonicity matters downstream.
+The one thing I'd watch for: `qwen2.5:14b` is generally well-behaved about following JSON-only instructions, but you may get occasional off-by-one errors in the `id` field (model resets to 1 mid-batch[...]
 
-> File: [/mnt/user-data/outputs/sentencize.py](https://claude.ai/api/organizations/840440cd-f1be-4af9-8726-7ed95cf3825c/conversations/a3eaadb6-09f1-4fdc-b179-04dd0024b254/wiggle/download-file?path=%2Fmnt%2Fuser-data%2Foutputs%2Fsentencize.py)
+> File: [/mnt/user-data/outputs/sentencize.py](https://claude.ai/api/organizations/840440cd-f1be-4af9-8726-7ed95cf3825c/conversations/a3eaadb6-09f1-4fdc-b179-04dd0024b254/wiggle/download-file?path=%2F[...]
 
 ## User:
 
-The next step in the process will be to take a collection of sentences, a chunk, and identify the nouns and pronouns and proper nouns in that chunk and group them together by which ones are likely to refer to the same person or object or place.
+The next step in the process will be to take a collection of sentences, a chunk, and identify the nouns and pronouns and proper nouns in that chunk and group them together by which ones are likely to [...]
 
 ## Assistant:
 
-That's the coreference resolution step — arguably the hardest part of the NER pipeline for literary text, because Doyle relies heavily on pronouns and circumlocutions ("the King", "the lady", "my client") that require world-knowledge to resolve.
+That's the coreference resolution step — arguably the hardest part of the NER pipeline for literary text, because Doyle relies heavily on pronouns and circumlocutions ("the King", "the lady", "my cl[...]
 
 The key design question is what the LLM returns. I'd suggest the output schema be something like:
 
@@ -130,9 +192,9 @@ The `label` is the LLM's best canonical name for the entity — it can upgrade a
 
 A few design tensions worth resolving before writing code:
 
-**Chunk boundaries** — coref chains can span chunk boundaries. "She" in sentence 21 may resolve to "Irene Adler" introduced in sentence 8. You need a **carry-over context**: include the last N sentences of the previous chunk as read-only context, clearly marked so the model doesn't re-emit them as new mentions.
+**Chunk boundaries** — coref chains can span chunk boundaries. "She" in sentence 21 may resolve to "Irene Adler" introduced in sentence 8. You need a **carry-over context**: include the last N sente[...]
 
-**Cross-chunk identity merging** — entity labels won't be perfectly consistent across chunks ("Irene Adler" vs "the lady" as the canonical label for the same entity). You'll need a merge pass afterward, probably another LLM call, that reconciles chunk-level entity labels into a global entity table.
+**Cross-chunk identity merging** — entity labels won't be perfectly consistent across chunks ("Irene Adler" vs "the lady" as the canonical label for the same entity). You'll need a merge pass afterw[...]
 
 **Confidence** — for ambiguous pronouns ("it", "they") an optional `"confidence": 0.7` field lets you filter during the merge pass.
 
@@ -155,15 +217,15 @@ python coref.py \
 
 A few design notes worth flagging:
 
-**Context leak guard** — the parser explicitly filters out any mention whose `sentence_id` falls outside the current chunk. Models occasionally pull a sentence ID from the context block despite being told not to; this catches it silently.
+**Context leak guard** — the parser explicitly filters out any mention whose `sentence_id` falls outside the current chunk. Models occasionally pull a sentence ID from the context block despite bein[...]
 
 **`type` field** — person/place/object/organization/other. Useful later when you're building the entity table and want to separate, say, "Baker Street" from "Holmes".
 
-**What this doesn't yet solve** — the cross-chunk merge problem. After this runs you'll have `bohemia_coref.jsonl` with one record per chunk, and "Irene Adler" in chunk 1 and "the lady" in chunk 3 are not yet known to be the same entity. That's the next step: a merge/reconciliation pass that builds a global entity table with canonical labels and aggregated mention lists across the whole story.
+**What this doesn't yet solve** — the cross-chunk merge problem. After this runs you'll have `bohemia_coref.jsonl` with one record per chunk, and "Irene Adler" in chunk 1 and "the lady" in chunk 3 a[...]
 
 Want to tackle that merge pass next, or run the first two steps against the actual text first to see what the output looks like?
 
-> File: [/mnt/user-data/outputs/coref.py](https://claude.ai/api/organizations/840440cd-f1be-4af9-8726-7ed95cf3825c/conversations/a3eaadb6-09f1-4fdc-b179-04dd0024b254/wiggle/download-file?path=%2Fmnt%2Fuser-data%2Foutputs%2Fcoref.py)
+> File: [/mnt/user-data/outputs/coref.py](https://claude.ai/api/organizations/840440cd-f1be-4af9-8726-7ed95cf3825c/conversations/a3eaadb6-09f1-4fdc-b179-04dd0024b254/wiggle/download-file?path=%2Fmnt%2[...]
 
 ## User:
 
@@ -171,13 +233,13 @@ Let's look at the merge pass, and for an authoritative ontology let's plan to us
 
 ## Assistant:
 
-Good call. Using the Baker Street Wiki as canonical authority means your entity labels won't drift across chunks — "Irene Adler" and "the Prima Donna" and "the woman" all resolve to the same wiki page, and that page slug or URL becomes the stable identifier in your entity table.
+Good call. Using the Baker Street Wiki as canonical authority means your entity labels won't drift across chunks — "Irene Adler" and "the Prima Donna" and "the woman" all resolve to the same wiki pa[...]
 
 The merge pass has two distinct sub-problems:
 
-**1. Intra-story clustering** — grouping chunk-level labels that clearly refer to the same entity ("the King", "His Majesty", "Wilhelm Gottsreich Sigismond von Ormstein") into a single candidate entity before going anywhere near the wiki.
+**1. Intra-story clustering** — grouping chunk-level labels that clearly refer to the same entity ("the King", "His Majesty", "Wilhelm Gottsreich Sigismond von Ormstein") into a single candidate ent[...]
 
-**2. Wiki linking** — taking each candidate entity and finding its Baker Street Wiki page, which gives you the canonical label, the URL as a stable ID, and potentially structured data (character type, appearances, relationships).
+**2. Wiki linking** — taking each candidate entity and finding its Baker Street Wiki page, which gives you the canonical label, the URL as a stable ID, and potentially structured data (character typ[...]
 
 For the wiki side, the question is what's available. Baker Street Wiki is a Fandom wiki, so it has:
 - A search endpoint: `https://bakerstreet.fandom.com/api.php?action=opensearch&search=<query>`
@@ -185,9 +247,9 @@ For the wiki side, the question is what's available. Baker Street Wiki is a Fand
 
 The merge architecture I'd propose:
 
-**Pass 1 — label clustering (LLM)**: Feed all unique entity labels from across all chunks to the LLM in one call (or batched if large), ask it to group labels that refer to the same entity and nominate a canonical name for each group.
+**Pass 1 — label clustering (LLM)**: Feed all unique entity labels from across all chunks to the LLM in one call (or batched if large), ask it to group labels that refer to the same entity and nomin[...]
 
-**Pass 2 — wiki lookup (API)**: For each canonical name, query the Baker Street Wiki search API, take the top result, and store the URL as the entity's stable ID. Flag low-confidence matches for human review.
+**Pass 2 — wiki lookup (API)**: For each canonical name, query the Baker Street Wiki search API, take the top result, and store the URL as the entity's stable ID. Flag low-confidence matches for hum[...]
 
 **Pass 3 — mention rewriting**: Walk back through `bohemia_coref.jsonl` and rewrite every mention's entity label to the canonical form, adding a `wiki_url` field.
 
@@ -206,7 +268,7 @@ The output entity table would look like:
 }
 ```
 
-One wrinkle worth thinking about before coding: some entities in the story won't have Baker Street Wiki pages — incidental characters, generic locations. You'll want a `wiki_url: null` fallback rather than a failed lookup blocking the pipeline.
+One wrinkle worth thinking about before coding: some entities in the story won't have Baker Street Wiki pages — incidental characters, generic locations. You'll want a `wiki_url: null` fallback rath[...]
 
 Want me to go ahead and code all three passes, or would you rather see the wiki API behavior first with a quick exploratory fetch?
 
@@ -216,7 +278,7 @@ For those unfindable incidental characters and things, use an ID like "provision
 
 ## Assistant:
 
-Good. That keeps every entity in the table addressable with a stable ID regardless of wiki coverage, and the `provisional:` prefix makes it obvious during downstream processing which ones lack authoritative grounding. You could also later do a second-pass wiki attempt on provisionals if the canonical name improves after merging.
+Good. That keeps every entity in the table addressable with a stable ID regardless of wiki coverage, and the `provisional:` prefix makes it obvious during downstream processing which ones lack authori[...]
 
 Coding all three passes now:
 
@@ -236,17 +298,17 @@ python merge.py \
 
 A few design notes:
 
-**Two-attempt wiki lookup** — first tries the canonical name, then falls back to the longest alias (which is often the most specific proper name). "the woman" won't find a wiki page; "Irene Adler" will.
+**Two-attempt wiki lookup** — first tries the canonical name, then falls back to the longest alias (which is often the most specific proper name). "the woman" won't find a wiki page; "Irene Adler" w[...]
 
 **`entity_id` scheme** — `wiki:Irene_Adler` for linked entities, `provisional:1` for everything else. The wiki slug is derived directly from the URL so it's stable across runs.
 
 **`--skip-wiki` flag** — useful for fast iteration during development; assigns provisional IDs to everything so you can inspect the clustering output before burning wiki API calls.
 
-**Flat mention output** — `bohemia_mentions.jsonl` has one record per mention with `entity_id`, `canonical`, `wiki_url`, `sentence_id`, `span`, and `confidence`. That's your primary query surface downstream — you can join it back to the sentence JSONL on `sentence_id` to reconstruct any mention in context.
+**Flat mention output** — `bohemia_mentions.jsonl` has one record per mention with `entity_id`, `canonical`, `wiki_url`, `sentence_id`, `span`, and `confidence`. That's your primary query surface do[...]
 
-At this point the full pipeline is `sentencize.py → coref.py → merge.py`, producing three artifacts: sentences, entities, and mentions. The natural next step would be a simple query tool that takes an entity name and returns all its mentions with surrounding sentence context. Want to add that, or is there another direction you want to go first?
+At this point the full pipeline is `sentencize.py → coref.py → merge.py`, producing three artifacts: sentences, entities, and mentions. The natural next step would be a simple query tool that take[...]
 
-> File: [/mnt/user-data/outputs/merge.py](https://claude.ai/api/organizations/840440cd-f1be-4af9-8726-7ed95cf3825c/conversations/a3eaadb6-09f1-4fdc-b179-04dd0024b254/wiggle/download-file?path=%2Fmnt%2Fuser-data%2Foutputs%2Fmerge.py)
+> File: [/mnt/user-data/outputs/merge.py](https://claude.ai/api/organizations/840440cd-f1be-4af9-8726-7ed95cf3825c/conversations/a3eaadb6-09f1-4fdc-b179-04dd0024b254/wiggle/download-file?path=%2Fmnt%2[...]
 
 
 ---
@@ -258,7 +320,7 @@ At this point the full pipeline is `sentencize.py → coref.py → merge.py`, pr
 
 > 6/9/2026 6:49:34
 
-The next step is to build triplets. Strategically, we could either (a) dig into the text to find what's there, or (b) we could rely on an a-priori predicate set that we cooked up earlier. Given the relative costs and capabilities of local vs cloud frontier, what do you think makes sense here?
+The next step is to build triplets. Strategically, we could either (a) dig into the text to find what's there, or (b) we could rely on an a-priori predicate set that we cooked up earlier. Given the re[...]
 
 ## Assistant:
 
@@ -266,13 +328,13 @@ The next step is to build triplets. Strategically, we could either (a) dig into 
 
 The same logic applies as with clustering — predicate extraction from literary text is a reasoning task, not a pattern-matching task, and the two sub-problems have different characters.
 
-**Predicate set design (a-priori)** is a one-time schema decision. You want predicates that are meaningful, consistent, and reusable across stories — `located_at`, `employed_by`, `romantically_linked_to`, `possesses`, `disguised_as`, `knows`, `observed_by`, and so on. This is a reasoning and ontology design task. Do it once with a frontier model (or just with you thinking carefully), freeze it, and treat it as a schema artifact. Cost: one API call or a whiteboard session.
+**Predicate set design (a-priori)** is a one-time schema decision. You want predicates that are meaningful, consistent, and reusable across stories — `located_at`, `employed_by`, `romantically_linke[...]
 
-**Triplet extraction from text** is where the volume is. Given a sentence, a predicate set, and a mention index, "find all (subject, predicate, object) triples that hold in this sentence" is exactly the kind of structured extraction that a local model handles well — it's essentially slot-filling against a known schema. The predicate set constrains the output space dramatically, which is what makes local viable here. Without it, the model has to invent predicates, and that's where you get inconsistency and hallucination.
+**Triplet extraction from text** is where the volume is. Given a sentence, a predicate set, and a mention index, "find all (subject, predicate, object) triples that hold in this sentence" is exactly t[...]
 
-So the strategy: **design the predicate set with Claude (or by hand), then run extraction locally on the G533 against the sentence JSONL + mention index.** The mention index is key — you pass in the canonical entity labels for the sentences in each chunk so the model is filling slots from a known entity set rather than doing open NER again.
+So the strategy: **design the predicate set with Claude (or by hand), then run extraction locally on the G533 against the sentence JSONL + mention index.** The mention index is key — you pass in the[...]
 
-The a-priori predicate set also has a deeper payoff: it's reusable across all Holmes stories, and eventually maps cleanly to a typed graph schema where predicates become edge types. That's the Graphwright pattern you already have.
+The a-priori predicate set also has a deeper payoff: it's reusable across all Holmes stories, and eventually maps cleanly to a typed graph schema where predicates become edge types. That's the Graphwr[...]
 
 Want to start by drafting the predicate set with me, or do you have one from earlier work we should pull in?
 
@@ -292,9 +354,9 @@ Here is something from earlier work. Does this appear suitable?
 
 Yes, this is exactly the right foundation. A few observations:
 
-`graph.py` is clean and well-suited. The `out_edges`/`in_edges` dual index, BFS with hop layers, and `truth_status` filtering are all things you'll want for querying a Holmes story graph. The `truth_status` dimension is particularly relevant — Holmes canon has asserted facts ("Irene Adler lives at Briony Lodge"), disputed facts ("Holmes believes the fire is real"), and hypothetical ones ("if the photograph exists..."). That maps directly onto what's in the text.
+`graph.py` is clean and well-suited. The `out_edges`/`in_edges` dual index, BFS with hop layers, and `truth_status` filtering are all things you'll want for querying a Holmes story graph. The `truth_s[...]
 
-Can you share `holmes_schema.py` as well? The document block only came through for `graph.py`. The schema is where the predicate set lives, and I want to see what edge types you already defined before we design the triplet extraction prompt — no point reinventing predicates you already have.
+Can you share `holmes_schema.py` as well? The document block only came through for `graph.py`. The schema is where the predicate set lives, and I want to see what edge types you already defined before[...]
 
 ## User:
 
@@ -315,15 +377,15 @@ try it now
 
 This is excellent — and it's already further along than I expected. A few observations before we design the extraction prompt:
 
-**The predicate set is well-suited for triplet extraction.** The predicates that will fire most often in Bohemia are `AssociatedWith`, `Knows`, `Possesses`, `DisguisedAs`/`HasTrueIdentity`, and `Involves`. `KnewAt` and `Contradicts` are higher-order and should probably be deferred — they require pointing at other predicate instances, which is too complex for a single extraction pass.
+**The predicate set is well-suited for triplet extraction.** The predicates that will fire most often in Bohemia are `AssociatedWith`, `Knows`, `Possesses`, `DisguisedAs`/`HasTrueIdentity`, and `Invol[...]
 
-**The `ProvenanceMixin` fields map cleanly onto what we have.** `story_id` is fixed ("bohemia"), `paragraph_index` is derivable from the sentence JSONL (`para` field), `extraction_confidence` is the mention confidence, and `extraction_method` is "llm-triplet-extraction".
+**The `ProvenanceMixin` fields map cleanly onto what we have.** `story_id` is fixed ("bohemia"), `paragraph_index` is derivable from the sentence JSONL (`para` field), `extraction_confidence` is the m[...]
 
 **`truth_status` defaults to `HYPOTHETICAL`** in the schema, which is exactly right for pipeline output — a separate promotion pass can flip things to `ASSERTED_TRUE` based on evidence weight.
 
-**The entity IDs are already resolved.** `entity_id` in `bohemia_entities.jsonl` is either `wiki:<slug>` or `provisional:<n>`, and `wiki:<slug>` maps directly to Baker Street Wiki URIs — which are the authoritative IDs for `Person`, `Location`, `Object`, and `Document` in the schema. The wiki slug just needs to be expanded to the full URI.
+**The entity IDs are already resolved.** `entity_id` in `bohemia_entities.jsonl` is either `wiki:<slug>` or `provisional:<n>`, and `wiki:<slug>` maps directly to Baker Street Wiki URIs — which are t[...]
 
-The extraction strategy I'd propose: run locally on the G533, one chunk at a time, with the mention index for that chunk injected into the prompt. The prompt tells the model exactly which predicates exist, what their domain/range constraints are, and asks it to emit one JSON object per triplet. `KnewAt` and `Contradicts` are excluded from the local pass and flagged for a separate frontier-model pass.
+The extraction strategy I'd propose: run locally on the G533, one chunk at a time, with the mention index for that chunk injected into the prompt. The prompt tells the model exactly which predicates e[...]
 
 Ready to write `triplets.py`?
 
@@ -331,7 +393,7 @@ Ready to write `triplets.py`?
 
 > 6/9/2026 6:55:10
 
-> [Earlier GH gist on ingestion and schema structure](https://gist.github.com/wware/1ef712eb037b0f95693a6e76d72382ac)
+> File: 
 
 Let me share some notes from that work so you have full context here.
 
@@ -341,7 +403,7 @@ Let me share some notes from that work so you have full context here.
 
 This is very helpful context — `scandal_instances.py` is essentially the gold standard for what the triplet extraction pipeline should produce. A few things this clarifies:
 
-**The entity ID convention is already settled.** Wiki-linked entities use the full Baker Street Wiki URI (`https://bakerstreet.fandom.com/wiki/Sherlock_Holmes`), and corpus-local entities use a `sib:` prefix scheme (`sib:persona:count_von_kramm`, `sib:event:kings_visit`). The `bohemia_entities.jsonl` currently has `wiki:Sherlock_Holmes` slugs — the extraction prompt needs to expand those to full URIs, or a post-processing step does it. Either way it's a trivial transform.
+**The entity ID convention is already settled.** Wiki-linked entities use the full Baker Street Wiki URI (`https://bakerstreet.fandom.com/wiki/Sherlock_Holmes`), and corpus-local entities use a `sib:`[...]
 
 **The predicate set divides cleanly into two extraction tiers:**
 
@@ -359,7 +421,7 @@ This is very helpful context — `scandal_instances.py` is essentially the gold 
 - `Contradicts` — higher-order, same problem
 - `Executes` — needs Plan entities which require their own extraction pass
 
-**`Event`, `Moment`, and `Plan` are corpus-local constructs** that don't exist in `bohemia_entities.jsonl` — the coref pipeline wouldn't have produced them since they're not noun phrases referring to named entities. They need to be extracted separately, or the triplet extraction pass needs to mint them on the fly and emit them alongside the triplet. The `scandal_instances.py` shows six hand-crafted events; the automated pass will need to do something similar.
+**`Event`, `Moment`, and `Plan` are corpus-local constructs** that don't exist in `bohemia_entities.jsonl` — the coref pipeline wouldn't have produced them since they're not noun phrases referring t[...]
 
 **The `ProvenanceMixin` fields are all available from context:**
 - `story_id` = `"scandal_in_bohemia"` (fixed)
@@ -370,9 +432,9 @@ This is very helpful context — `scandal_instances.py` is essentially the gold 
 
 The practical question before writing `triplets.py`: how do you want to handle `Event` and `Moment` instances? Options:
 
-1. **Mint them inline** — the extraction pass emits new corpus-local IDs (`sib:event:...`, `sib:moment:...`) alongside triplets that reference them, and a separate collector assembles them into entity records.
+1. **Mint them inline** — the extraction pass emits new corpus-local IDs (`sib:event:...`, `sib:moment:...`) alongside triplets that reference them, and a separate collector assembles them into enti[...]
 2. **Separate event extraction pass** — run a dedicated pass that identifies discrete events and moments, assigns IDs, then feed that index into the triplet pass.
-3. **Defer `Involves`/`OccurredAt`** — skip event-anchored predicates in the automated pass, handle them manually or with a frontier model, and focus the local pass on the simpler dyadic predicates first.
+3. **Defer `Involves`/`OccurredAt`** — skip event-anchored predicates in the automated pass, handle them manually or with a frontier model, and focus the local pass on the simpler dyadic predicates [...]
 
 Option 3 is the most conservative and gets you real graph data fastest. Option 2 is cleaner architecturally. What's your preference?
 
@@ -386,13 +448,13 @@ Let's do option 2
 
 > 6/9/2026 6:56:15
 
-Good choice. The event extraction pass is conceptually cleaner and produces a richer index for the triplet pass — once you have named events with stable IDs, `Involves` and `OccurredAt` become straightforward slot-filling like everything else.
+Good choice. The event extraction pass is conceptually cleaner and produces a richer index for the triplet pass — once you have named events with stable IDs, `Involves` and `OccurredAt` become strai[...]
 
 The event extraction pass needs to do three things:
 
-**1. Identify discrete events** — find sentences or sentence clusters that describe a thing that happened: an action, an arrival, a revelation, a deception. Not states ("Irene lives at Briony Lodge") — those become `AssociatedWith`. Events have agency and temporal boundedness.
+**1. Identify discrete events** — find sentences or sentence clusters that describe a thing that happened: an action, an arrival, a revelation, a deception. Not states ("Irene lives at Briony Lodge"[...]
 
-**2. Identify moments** — temporal anchors, either explicit ("on the evening of March 20th") or implicit ("when Holmes arrived"). Moments come in two flavors per the schema: objective timeline (no `narrator`) and epistemic timeline (with `narrator` — when someone *learned* something).
+**2. Identify moments** — temporal anchors, either explicit ("on the evening of March 20th") or implicit ("when Holmes arrived"). Moments come in two flavors per the schema: objective timeline (no `[...]`
 
 **3. Assign stable corpus-local IDs** — `sib:event:<slug>` and `sib:moment:<slug>` where the slug is a short snake_case description. Content-addressed would be cleaner but slugs are more debuggable.
 
@@ -422,9 +484,9 @@ Each moment record:
 }
 ```
 
-The `participants` field in the event record is pre-linking — the model pulls from the known entity index, which means the triplet pass gets `Involves` edges nearly for free. The `event_id` on moments links them back to their anchoring event for `OccurredAt`.
+The `participants` field in the event record is pre-linking — the model pulls from the known entity index, which means the triplet pass gets `Involves` edges nearly for free. The `event_id` on momen[...]
 
-This pass warrants a frontier model call — event and moment identification requires narrative reasoning, distinguishing state from action, and handling Doyle's indirect narration (Watson often describes what Holmes told him rather than what Watson witnessed). The G533 would struggle with that.
+This pass warrants a frontier model call — event and moment identification requires narrative reasoning, distinguishing state from action, and handling Doyle's indirect narration (Watson often descr[...]
 
 Ready to write `events.py`?
 
@@ -446,13 +508,13 @@ yes please
 
 A few design decisions worth noting:
 
-**Sidecar progress file** — since events and moments go to separate output files there's no single file to scan for resume state, so a `.bohemia_events_progress.json` sidecar tracks completed chunk IDs. It's a simple sorted JSON array of strings, easy to inspect or manually edit.
+**Sidecar progress file** — since events and moments go to separate output files there's no single file to scan for resume state, so a `.bohemia_events_progress.json` sidecar tracks completed chunk [...]
 
-**`known_event_ids` threading** — events are accumulated into a set as each chunk is processed and passed into `validate_moment` so moment `event_id` references can be checked. Forward references (a moment referencing an event not yet extracted) are kept rather than dropped — the triplet pass tolerates dangling refs and a later cleanup pass can resolve them.
+**`known_event_ids` threading** — events are accumulated into a set as each chunk is processed and passed into `validate_moment` so moment `event_id` references can be checked. Forward references (a[...]
 
-**`SlugRegistry`** — enforces global uniqueness of `sib:event:` and `sib:moment:` slugs within a run. If Claude emits the same slug in two chunks (which happens at chunk boundaries for events that span multiple sentences), the second occurrence is treated as a duplicate and silently dropped rather than renamed. The cross-chunk dedup rule in the prompt asks Claude to prefer the most complete description, so the first occurrence should be the right one.
+**`SlugRegistry`** — enforces global uniqueness of `sib:event:` and `sib:moment:` slugs within a run. If Claude emits the same slug in two chunks (which happens at chunk boundaries for events that s[...]
 
-**Entity ID expansion** — `load_entities` expands `wiki:Sherlock_Holmes` → `https://bakerstreet.fandom.com/wiki/Sherlock_Holmes` so the prompt shows full URIs matching the schema's ID convention, and participants in the output use those same full URIs.
+**Entity ID expansion** — `load_entities` expands `wiki:Sherlock_Holmes` → `https://bakerstreet.fandom.com/wiki/Sherlock_Holmes` so the prompt shows full URIs matching the schema's ID convention, [...]
 
 Typical invocation:
 ```bash
@@ -465,7 +527,7 @@ python events.py \
 
 After this runs successfully, `triplets.py` has everything it needs: entities, events, and moments all indexed with stable IDs.
 
-> File: [/mnt/user-data/outputs/events.py](https://claude.ai/api/organizations/840440cd-f1be-4af9-8726-7ed95cf3825c/conversations/a3eaadb6-09f1-4fdc-b179-04dd0024b254/wiggle/download-file?path=%2Fmnt%2Fuser-data%2Foutputs%2Fevents.py)
+> File: [/mnt/user-data/outputs/events.py](https://claude.ai/api/organizations/840440cd-f1be-4af9-8726-7ed95cf3825c/conversations/a3eaadb6-09f1-4fdc-b179-04dd0024b254/wiggle/download-file?path=%2Fmnt%[...]
 
 ## User:
 
@@ -514,19 +576,19 @@ python triplets.py \
 
 A few design notes worth calling out:
 
-**Local model, not Claude.** This is the slot-filling pass — the entity index constrains the output space so tightly that `qwen2.5:14b` handles it well. The prompt injects partitioned entity IDs (persons, personas, locations, objects, events, moments) so the model is choosing from known IDs rather than doing open NER.
+**Local model, not Claude.** This is the slot-filling pass — the entity index constrains the output space so tightly that `qwen2.5:14b` handles it well. The prompt injects partitioned entity IDs (pe[...]
 
-**Domain/range enforcement in Python.** `validate_triplet` checks predicate, subject type, and object type against `DOMAIN_RANGE` which mirrors `holmes_schema.py` exactly. A `Knows(Location → Person)` coming back from the model is caught and dropped with a warning rather than silently polluting the output.
+**Domain/range enforcement in Python.** `validate_triplet` checks predicate, subject type, and object type against `DOMAIN_RANGE` which mirrors `holmes_schema.py` exactly. A `Knows(Location → Person[...]
 
 **`TripletRegistry`** deduplicates on `(predicate, subject_id, object_id)` across the whole run, including across resume boundaries — it pre-loads existing output on startup.
 
-**`truth_status` is always `hypothetical`.** Consistent with the schema's lifecycle: the pipeline creates instances as hypothetical, a separate promotion pass upgrades them to `asserted_true` based on evidence weight or manual review.
+**`truth_status` is always `hypothetical`.** Consistent with the schema's lifecycle: the pipeline creates instances as hypothetical, a separate promotion pass upgrades them to `asserted_true` based on[...]
 
-**Deferred predicates are noted but not attempted.** `KnewAt`, `Contradicts`, and `Executes` need either higher-order object references or `Plan` entities — those warrant their own pass, likely with the frontier model.
+**Deferred predicates are noted but not attempted.** `KnewAt`, `Contradicts`, and `Executes` need either higher-order object references or `Plan` entities — those warrant their own pass, likely with[...]
 
 The full pipeline is now complete end-to-end: `sentencize → coref → merge → events → triplets`.
 
-> File: [/mnt/user-data/outputs/triplets.py](https://claude.ai/api/organizations/840440cd-f1be-4af9-8726-7ed95cf3825c/conversations/a3eaadb6-09f1-4fdc-b179-04dd0024b254/wiggle/download-file?path=%2Fmnt%2Fuser-data%2Foutputs%2Ftriplets.py)
+> File: [/mnt/user-data/outputs/triplets.py](https://claude.ai/api/organizations/840440cd-f1be-4af9-8726-7ed95cf3825c/conversations/a3eaadb6-09f1-4fdc-b179-04dd0024b254/wiggle/download-file?path=%2Fmn[...]
 
 ## User:
 
@@ -563,15 +625,15 @@ Generated 46 chunks (size=15, overlap=3)
 
 The model is inventing IDs rather than using the ones from the index. It's ignoring the injected entity index and constructing its own `sib:entity:` scheme. Two problems:
 
-1. **The entity IDs we're injecting are long Baker Street Wiki URIs** — `https://bakerstreet.fandom.com/wiki/Sherlock_Holmes` — which the model finds unwieldy and substitutes with its own compact scheme.
+1. **The entity IDs we're injecting are long Baker Street Wiki URIs** — `https://bakerstreet.fandom.com/wiki/Sherlock_Holmes` — which the model finds unwieldy and substitutes with its own compact [...]
 
 2. **178 events is a lot to inject into every chunk prompt.** That's drowning the useful signal and likely pushing the model toward inventing IDs rather than scanning a wall of text.
 
 Both are fixable. The approach:
 
-**Short alias IDs in the prompt** — inject a compact alias like `person:sherlock_holmes` in the prompt, map it back to the canonical URI in the validator. The model works with short IDs; we expand them post-validation.
+**Short alias IDs in the prompt** — inject a compact alias like `person:sherlock_holmes` in the prompt, map it back to the canonical URI in the validator. The model works with short IDs; we expand t[...]
 
-**Filter events/moments to the chunk window** — only inject events and moments whose `sentence_ids` overlap or are near the current chunk, rather than the full 178. This dramatically shrinks the prompt and keeps the context relevant.
+**Filter events/moments to the chunk window** — only inject events and moments whose `sentence_ids` overlap or are near the current chunk, rather than the full 178. This dramatically shrinks the pro[...]
 
 Let me patch those two things:
 
@@ -594,13 +656,13 @@ Good, I have the full picture. Two surgical changes needed:
 
 The two root causes are fixed:
 
-**Alias IDs** — the prompt now shows `person:sherlock_holmes -> Sherlock Holmes` instead of `https://bakerstreet.fandom.com/wiki/Sherlock_Holmes -> Sherlock Holmes`. The model uses the short alias; `validate_triplet` resolves it back to the canonical URI via `alias_to_id`. The validator also uses `alias_to_type` as ground truth for type-checking rather than trusting what the model says in `subject_type`/`object_type`.
+**Alias IDs** — the prompt now shows `person:sherlock_holmes -> Sherlock Holmes` instead of `https://bakerstreet.fandom.com/wiki/Sherlock_Holmes -> Sherlock Holmes`. The model uses the short alias; [...]
 
-**Event window filtering** — instead of all 178 events, each chunk now sees only the events and moments whose `sentence_ids` fall within `--event-window` sentences of the chunk boundaries (default ±30). The progress line now shows the counts: `(15 sents, 3 ctx, 8 evts, 3 moms)` so you can see it's working.
+**Event window filtering** — instead of all 178 events, each chunk now sees only the events and moments whose `sentence_ids` fall within `--event-window` sentences of the chunk boundaries (default �[...]
 
 The `[warn] unknown subject alias` messages will still appear if the model invents a completely novel ID, but that should now be rare since the aliases are short and memorable.
 
-> File: [/mnt/user-data/outputs/triplets.py](https://claude.ai/api/organizations/840440cd-f1be-4af9-8726-7ed95cf3825c/conversations/a3eaadb6-09f1-4fdc-b179-04dd0024b254/wiggle/download-file?path=%2Fmnt%2Fuser-data%2Foutputs%2Ftriplets.py)
+> File: [/mnt/user-data/outputs/triplets.py](https://claude.ai/api/organizations/840440cd-f1be-4af9-8726-7ed95cf3825c/conversations/a3eaadb6-09f1-4fdc-b179-04dd0024b254/wiggle/download-file?path=%2Fmn[...]
 
 ## User:
 
@@ -609,7 +671,7 @@ The `[warn] unknown subject alias` messages will still appear if the model inven
 Still a bit of trouble
 
 ```
-➜  ner-20260608 git:(main) pdm run python src/triplets.py --sentences bohemia_sentences.jsonl --entities  bohemia_entities.jsonl --events    bohemia_events.jsonl --moments   bohemia_moments.jsonl --output    bohemia_triplets.jsonl                                                                                                                                                    
+➜  ner-20260608 git:(main) pdm run python src/triplets.py --sentences bohemia_sentences.jsonl --entities  bohemia_entities.jsonl --events    bohemia_events.jsonl --moments   bohemia_moments.jsonl --[...]
 Loaded: 689 sentences, 72 entities, 178 events, 36 moments
 Alias index: 31 persons, 1 personas, 10 locations, 19 objects, 178 events, 36 moments
 Generated 46 chunks (size=15, overlap=3, event-window=+/-30)
@@ -626,11 +688,11 @@ Generated 46 chunks (size=15, overlap=3, event-window=+/-30)
 
 Two issues visible here:
 
-**`person:dr_watson` unknown** — the alias generated from "Dr Watson" is `person:dr_watson` but the model is emitting `person:dr_watson` with a period or slightly different slug. Let's check what alias actually got generated:
+**`person:dr_watson` unknown** — the alias generated from "Dr Watson" is `person:dr_watson` but the model is emitting `person:dr_watson` with a period or slightly different slug. Let's check what al[...]
 
-The `make_alias` function does `re.sub(r"[^a-z0-9]+", "_", name.lower())` — so "Dr Watson" → `person:dr_watson` which looks right. But "Dr. Watson" (with period) → same result. The issue is likely that the entity's canonical name in `bohemia_entities.jsonl` is "Dr Watson" but the model is guessing `person:dr_watson` with slightly different spacing or the canonical is something else entirely. Easy fix: add a `--debug` run on chunk 2 to see what alias is actually in the index vs what the model emits.
+The `make_alias` function does `re.sub(r"[^a-z0-9]+", "_", name.lower())` — so "Dr Watson" → `person:dr_watson` which looks right. But "Dr. Watson" (with period) → same result. The issue is like[...]
 
-**Timeout on chunk 3** — 22 events + 2 moments is still a lot of prompt. The default Ollama timeout is 180s but `qwen2.5:14b` on a 15-sentence chunk with 22 events injected may just be slow. Two knobs:
+**Timeout on chunk 3** — 22 events + 2 moments is still a lot of prompt. The default Ollama timeout is 180s but `qwen2.5:14b` on a 15-sentence chunk with 22 events injected may just be slow. Two kno[...]
 
 1. Reduce `--event-window` from 30 to 15 — cuts the event list significantly
 2. Increase the httpx timeout
@@ -647,7 +709,7 @@ Let me fix both the alias debug visibility and the timeout:
 Three fixes needed:
 
 1. **Timeout** — bump from 180s to 300s and use httpx's `(connect, read)` tuple form so only the read timeout is long
-2. **`person:dr_watson` alias collision** — "Dr Watson" generates `person:dr_watson` but the prompt template hardcodes `person:dr_watson` as the example narrator, which the model copies literally even when the real alias differs. Fix: remove the hardcoded example from the prompt and add a `--dump-aliases` flag for debugging
+2. **`person:dr_watson` alias collision** — "Dr Watson" generates `person:dr_watson` but the prompt template hardcodes `person:dr_watson` as the example narrator, which the model copies literally ev[...]
 3. **Event window default** — drop from 30 to 15
 
 > Edited 3 files
@@ -670,7 +732,7 @@ Three changes:
 
 **Timeout** — now `httpx.Timeout(10.0, read=360.0)`: 10s to connect, 6 minutes to read. The slow chunk was almost certainly a long generation, not a hung connection.
 
-**Hardcoded narrator alias removed** — the prompt used to say `usually person:dr_watson` as an example, which the model was copying verbatim even when Watson's actual alias was `person:dr_watson_` or similar due to a collision. The model should now look up the narrator from the index like everything else.
+**Hardcoded narrator alias removed** — the prompt used to say `usually person:dr_watson` as an example, which the model was copying verbatim even when Watson's actual alias was `person:dr_watson_` o[...]
 
 **Event window halved** — 15 instead of 30, which should roughly halve the events injected per chunk and reduce generation time.
 
@@ -687,7 +749,7 @@ pdm run python src/triplets.py \
 
 That'll show you the exact alias for Watson and confirm whether `person:dr_watson` is in the table or not.
 
-> File: [/mnt/user-data/outputs/triplets.py](https://claude.ai/api/organizations/840440cd-f1be-4af9-8726-7ed95cf3825c/conversations/a3eaadb6-09f1-4fdc-b179-04dd0024b254/wiggle/download-file?path=%2Fmnt%2Fuser-data%2Foutputs%2Ftriplets.py)
+> File: [/mnt/user-data/outputs/triplets.py](https://claude.ai/api/organizations/840440cd-f1be-4af9-8726-7ed95cf3825c/conversations/a3eaadb6-09f1-4fdc-b179-04dd0024b254/wiggle/download-file?path=%2Fmn[...]
 
 ## User:
 
@@ -699,17 +761,17 @@ That'll show you the exact alias for Watson and confirm whether `person:dr_watso
 
 > 6/9/2026 7:32:53
 
-The alias table looks correct. Watson is `person:dr_watson` — wait, he's not there at all. He's listed as `person:john` because the canonical in `bohemia_entities.jsonl` is "John" (the wiki linked him to `John_Watson` but the canonical label came back as "John" from the clustering pass). That's why `person:dr_watson` is unknown — the model guesses the intuitive alias but the actual alias is `person:john`.
+The alias table looks correct. Watson is `person:dr_watson` — wait, he's not there at all. He's listed as `person:john` because the canonical in `bohemia_entities.jsonl` is "John" (the wiki linked h[...]
 
 That's a data quality issue in the entity table, not a code bug. Two ways to fix it:
 
-**Option A — patch the entity table**: edit `bohemia_entities.jsonl` to change the canonical for that record from "John" to "Dr Watson" (or "Dr. John H. Watson"), then rerun `triplets.py`. One-time fix, clean output.
+**Option A — patch the entity table**: edit `bohemia_entities.jsonl` to change the canonical for that record from "John" to "Dr Watson" (or "Dr. John H. Watson"), then rerun `triplets.py`. One-time [...]
 
-**Option B — add alias synonyms**: for each entity, generate aliases from both the canonical name AND any aliases in the entity record that are more recognizable, so "Dr Watson", "Watson", "Dr. John H. Watson" all resolve to the same ID.
+**Option B — add alias synonyms**: for each entity, generate aliases from both the canonical name AND any aliases in the entity record that are more recognizable, so "Dr Watson", "Watson", "Dr. John[...]
 
-Option A is the right call here — "John" is a poor canonical, it's genuinely a data quality problem from the clustering pass merging Watson's first name mention with his full name. The fix is in the entity table.
+Option A is the right call here — "John" is a poor canonical, it's genuinely a data quality problem from the clustering pass merging Watson's first name mention with his full name. The fix is in the[...]
 
-While you're in there it's worth scanning for similar problems — `person:your_majesty` and `person:woman` are both going to cause alias mismatches since the model will try `person:the_king` or `person:irene_adler` for those. The fuller fix is Option B as a systematic improvement to `build_alias_tables`: iterate over `aliases` in each entity record and register all of them pointing to the same canonical ID, so any reasonable alias the model might guess resolves correctly.
+While you're in there it's worth scanning for similar problems — `person:your_majesty` and `person:woman` are both going to cause alias mismatches since the model will try `person:the_king` or `pers[...]
 
 Want me to implement Option B in `build_alias_tables`?
 
@@ -720,11 +782,11 @@ Want me to implement Option B in `build_alias_tables`?
 uh oh
 
 ```
-{"canonical": "Sherlock Holmes", "aliases": ["Holmes", "the detective", "Sherlock Holmes"], "type": "person", "wiki_url": "https://bakerstreet.fandom.com/wiki/Sherlock_Holmes", "entity_id": "wiki:Sherlock_Holmes"}
-{"canonical": "Dr Watson", "aliases": ["Watson", "Doctor", "narrator", "the narrator", "I", "Dr Watson"], "type": "person", "wiki_url": "https://bakerstreet.fandom.com/wiki/John_Watson", "entity_id": "wiki:John_Watson"}
-{"canonical": "Wilhelm Gottsreich Sigismond von Ormstein", "aliases": ["King of Bohemia", "Count Von Kramm", "Bohemian nobleman", "King", "the King", "the King of Bohemia", "client", "my client", "the client", "Wilhelm Gottsreich Sigismond von Ormstein"], "type": "person", "wiki_url": "https://bakerstreet.fandom.com/wiki/Wilhelm_von_Ormstein", "entity_id": "wiki:Wilhelm_von_Ormstein"}
-{"canonical": "Irene Adler", "aliases": ["Irene Norton", "Miss Irene", "Miss Irene Adler", "the woman", "lady", "the lady", "Madame", "the occupant of Briony Lodge", "Irene Adler"], "type": "person", "wiki_url": "https://bakerstreet.fandom.com/wiki/Irene_Adler", "entity_id": "wiki:Irene_Adler"}
-{"canonical": "Godfrey Norton", "aliases": ["Mr. Godfrey Norton", "Norton", "gentleman", "husband", "her husband", "Godfrey Norton"], "type": "person", "wiki_url": "https://bakerstreet.fandom.com/wiki/Godfrey_Norton", "entity_id": "wiki:Godfrey_Norton"}
+{"canonical": "Sherlock Holmes", "aliases": ["Holmes", "the detective", "Sherlock Holmes"], "type": "person", "wiki_url": "https://bakerstreet.fandom.com/wiki/Sherlock_Holmes", "entity_id": "wiki:Sher[...]
+{"canonical": "Dr Watson", "aliases": ["Watson", "Doctor", "narrator", "the narrator", "I", "Dr Watson"], "type": "person", "wiki_url": "https://bakerstreet.fandom.com/wiki/John_Watson", "entity_id": [...]
+{"canonical": "Wilhelm Gottsreich Sigismond von Ormstein", "aliases": ["King of Bohemia", "Count Von Kramm", "Bohemian nobleman", "King", "the King", "the King of Bohemia", "client", "my client", "the[...]
+{"canonical": "Irene Adler", "aliases": ["Irene Norton", "Miss Irene", "Miss Irene Adler", "the woman", "lady", "the lady", "Madame", "the occupant of Briony Lodge", "Irene Adler"], "type": "person", [...]
+{"canonical": "Godfrey Norton", "aliases": ["Mr. Godfrey Norton", "Norton", "gentleman", "husband", "her husband", "Godfrey Norton"], "type": "person", "wiki_url": "https://bakerstreet.fandom.com/wiki[...]
 {"canonical": "Watson's wife", "aliases": ["Watson's wife"], "type": "person", "wiki_url": "https://bakerstreet.fandom.com/wiki/Mary_Watson", "entity_id": "wiki:Mary_Watson"}
 {"canonical": "Mrs. Turner", "aliases": ["the landlady", "Mrs. Turner"], "type": "person", "wiki_url": null, "entity_id": "provisional:28"}
 {"canonical": "Mary Jane", "aliases": ["maid", "the maid", "Mary Jane"], "type": "person", "wiki_url": null, "entity_id": "provisional:29"}
@@ -737,11 +799,11 @@ Watson appears (at least) twice, second time as "John".
 
 > 6/9/2026 7:36:30
 
-Right — the clustering pass produced two separate clusters that both linked to `John_Watson`. "Dr Watson" got clustered correctly with its aliases, and "John" (a bare first-name mention somewhere in the text) got treated as a separate entity and happened to also link to the same wiki page.
+Right — the clustering pass produced two separate clusters that both linked to `John_Watson`. "Dr Watson" got clustered correctly with its aliases, and "John" (a bare first-name mention somewhere in[...]
 
-The fix belongs in `merge.py` — after wiki linking, deduplicate on `entity_id`: if two clusters resolve to the same `entity_id`, merge them (union their aliases, keep the more specific canonical, keep one record). This is a post-linking deduplication pass that should run before the entity table is written.
+The fix belongs in `merge.py` — after wiki linking, deduplicate on `entity_id`: if two clusters resolve to the same `entity_id`, merge them (union their aliases, keep the more specific canonical, ke[...]
 
-The bug is that the wiki judgment pass creates a many-to-one situation (multiple clusters → same wiki URL) that nothing currently detects. Here's the fix — a `dedup_by_entity_id` function to add to `merge.py`:
+The bug is that the wiki judgment pass creates a many-to-one situation (multiple clusters → same wiki URL) that nothing currently detects. Here's the fix — a `dedup_by_entity_id` function to add t[...]
 
 > Viewed 3 files, edited file, ran 3 commands
 >
@@ -768,7 +830,7 @@ Good. Now add the function itself before `main()`:
 Clean. What `dedup_by_entity_id` does:
 
 - Groups all clusters by `entity_id` after the wiki linking pass
-- If a group has more than one cluster (the collision case), merges them: unions all aliases, picks the canonical with the most words as the most specific name ("Dr Watson" beats "John", "Wilhelm Gottsreich Sigismond von Ormstein" beats "King")
+- If a group has more than one cluster (the collision case), merges them: unions all aliases, picks the canonical with the most words as the most specific name ("Dr Watson" beats "John", "Wilhelm Gott[...]
 - Logs each merge to stderr so you can see what collapsed
 - Provisional IDs are assigned sequentially and are unique by construction, so they never collide here
 
@@ -777,9 +839,9 @@ After rerunning `merge.py` you should see something like:
 [dedup] merged 2 clusters -> wiki:John_Watson: ['Dr Watson', 'John']
 ```
 
-And the entity table will have one Watson record with the full alias set including "John", "Watson", "Doctor", "narrator", "I", "Dr Watson" — all resolving to `wiki:John_Watson`. That also fixes the `triplets.py` alias problem since `build_alias_tables` will now generate `person:dr_watson` from the merged canonical and all the other aliases will be registered as synonyms once we implement Option B there.
+And the entity table will have one Watson record with the full alias set including "John", "Watson", "Doctor", "narrator", "I", "Dr Watson" — all resolving to `wiki:John_Watson`. That also fixes the[...]
 
-> File: [/mnt/user-data/outputs/merge.py](https://claude.ai/api/organizations/840440cd-f1be-4af9-8726-7ed95cf3825c/conversations/a3eaadb6-09f1-4fdc-b179-04dd0024b254/wiggle/download-file?path=%2Fmnt%2Fuser-data%2Foutputs%2Fmerge.py)
+> File: [/mnt/user-data/outputs/merge.py](https://claude.ai/api/organizations/840440cd-f1be-4af9-8726-7ed95cf3825c/conversations/a3eaadb6-09f1-4fdc-b179-04dd0024b254/wiggle/download-file?path=%2Fmnt%2[...]
 
 ## User:
 
@@ -986,9 +1048,9 @@ Good progress — the dedup worked perfectly:
 
 `person:dr_watson` is now in the alias table where it belongs. A few other things worth noting from this output:
 
-**`person:german` linked to `wiki:Germany`** — that's a spurious wiki link. "German" in context means "a German person" or an adjective, not the country. Claude over-linked that one. Worth a manual fix in the entity table — change `wiki_url` to null and `entity_id` to a provisional.
+**`person:german` linked to `wiki:Germany`** — that's a spurious wiki link. "German" in context means "a German person" or an adjective, not the country. Claude over-linked that one. Worth a manual [...]
 
-**`events.py` skipped entirely** — the sidecar progress file from the previous run marked all 23 chunks as done, so it found 0 new events. Since you re-ran `merge.py` and the entity table changed, the events pass should be re-run from scratch. Delete `.bohemia_events_progress.json` (and the existing `bohemia_events.jsonl` and `bohemia_moments.jsonl`) before rerunning `events.py`.
+**`events.py` skipped entirely** — the sidecar progress file from the previous run marked all 23 chunks as done, so it found 0 new events. Since you re-ran `merge.py` and the entity table changed, t[...]
 
 **`triplets.py` similarly** — it's still sitting on the old progress file, so when you run the full extraction it'll also need its sidecar cleared.
 
@@ -998,5 +1060,7 @@ rm -f bohemia_events.jsonl bohemia_moments.jsonl .bohemia_events_progress.json
 rm -f bohemia_triplets.jsonl .bohemia_triplets_progress.json
 ```
 
-Then fix the `german` entity, and rerun `events.py` followed by `triplets.py`. Want me to also implement the alias synonym registration (Option B) in `build_alias_tables` while we're here, so all the aliases from the entity record resolve correctly rather than just the canonical?
+Then fix the `german` entity, and rerun `events.py` followed by `triplets.py`. Want me to also implement the alias synonym registration (Option B) in `build_alias_tables` while we're here, so all the [...]
 
+
+```
