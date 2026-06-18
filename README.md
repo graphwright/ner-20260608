@@ -8,7 +8,7 @@ We've talked a bit about how the g533 Tower that I purchased is potentially a go
 
 ## Assistant:
 
-Yes, that assessment holds. The nuance from our conversation was actually more specific than "graphics traction" — the G533's RX 9060 XT with 16GB VRAM is well-suited for **batch inference workloads like the Graphwright ingestion pipeline** (NER, relationship extraction), where you're repeatedly feeding structured prompts through a model and don't need low latency.
+Yes, that assessment holds. The nuance from our conversation was actually more specific than graph extraction — the G533's RX 9060 XT with 16GB VRAM is well-suited for **batch inference workloads like the Graphwright ingestion pipeline** (NER, relationship extraction), where you're repeatedly feeding structured prompts through a model and don't need low latency.
 
 Where it's weaker is **interactive query synthesis** — the orchestrator/synthesizer pattern where you want fast, high-quality multi-hop reasoning over graph results. Two compounding issues:
 
