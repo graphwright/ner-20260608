@@ -28,15 +28,170 @@ g = load_bohemia_graph()          # loads bundled JSONL, ~100 ms
 
 # Direct lookup — wiki: prefix or full URL both work
 holmes = g.get("wiki:Sherlock_Holmes")
-print(holmes)                     # Person('wiki:Sherlock_Holmes')
+print(holmes)                     # Sherlock Holmes   (str uses display_name)
+print(repr(holmes))               # Person('wiki:Sherlock_Holmes')  (repr shows id)
 
-# Human-readable one-liner
-print(g.describe("wiki:Irene_Adler"))   # Person(Irene Adler)
+# describe() delegates to str()
+print(g.describe("wiki:Irene_Adler"))   # Irene Adler
 
 # Who does Watson know (asserted true)?
 edges = g.edges_from("wiki:John_Watson", truth="asserted_true")
 g.print_edges(edges)
+# → Knows(Dr. Watson → Sherlock Holmes)  [asserted_true]
 ```
+
+---
+
+## Evidence assembly just before the revelation
+
+This example builds a temporally-bounded subgraph — everything up to but not
+including the moment Holmes reveals the photograph's location — and shows what
+evidence is available to support the conclusion.
+
+> **What this example does and does not do.** The code below assembles the
+> evidence base: it shows which facts in the pre-cutoff graph bear on the
+> question of who has the photograph. It does *not* mechanically derive
+> `Possesses(Irene, photograph)` as a new statement — that would require a
+> rule (in the `Rule(φ ⇒ ψ)` sense from the formal spec) and an inference
+> engine to fire it. Neither exists yet. Step 5 verifies the conclusion using
+> the full graph, which is a spoiler check, not a proof. The gap between
+> "evidence assembled" and "conclusion derived" is where rule-based inference
+> would live.
+
+**The scene:** Holmes and Watson have just walked away from Briony Lodge after
+the staged fire alarm. Watson asks: *"You have the photograph?"* Holmes replies:
+*"I know where it is."* That exchange is sentence 485–486. We stop the graph
+one sentence before it.
+
+### Step 1 — build the pre-revelation subgraph
+
+```python
+from ner_20260608 import load_bohemia_graph
+from ner_20260608.holmes_schema import Possesses, Involves
+
+CUTOFF = 485  # sentence 485: "You have the photograph?"
+
+pre = load_bohemia_graph(sentence_cutoff=CUTOFF, warn=False)
+# sentence_cutoff is exclusive: triplets are included only when
+# max(sentence_ids) < CUTOFF. Sentence 485 itself is NOT in `pre`.
+```
+
+### Step 2 — what does the subgraph say Irene Adler possesses?
+
+```python
+irene_possesses = pre.edges_from(
+    "wiki:Irene_Adler", pred_type=Possesses, truth="asserted_true"
+)
+print([e.object_.display_name for e in irene_possesses])
+# → ["Irene Adler's purse", "Irene Adler's watch"]
+```
+
+The photograph is absent. The subgraph contains no `Possesses` statement linking
+Irene to the photograph — that statement only appears at sentence 511, after Holmes
+observes her reach for it during the smoke-rocket alarm.
+
+### Step 3 — trace the photograph evidence chain
+
+Even without the possession statement, the subgraph holds three events connecting
+Irene to the photograph:
+
+```python
+photo_events = [
+    e.subject
+    for e in pre.edges_to(
+        "wiki:Irene_Adler", pred_type=Involves, truth="asserted_true"
+    )
+    if "photograph" in e.subject.description.lower()
+]
+for ev in photo_events:
+    print(repr(ev))        # Event('sib:event:joint_photograph_revealed')
+    print(" ", ev)         # The King reveals that he and Irene Adler were both...
+    print(" ", ev.description)
+```
+
+Output:
+
+```
+Event('sib:event:joint_photograph_revealed')
+  The King reveals that he and Irene Adler were both in the compromising
+  photograph together, alarming Holmes.
+Event('sib:event:irene_threatens_to_send_photograph')
+  Irene Adler threatens to send the compromising photograph to the King's
+  betrothed on the day the betrothal is publicly proclaimed.
+Event('sib:event:holmes_discusses_photograph_location')
+  Holmes reasoned aloud to Watson about where Irene Adler would conceal the
+  photograph, concluding she would not carry it on her person.
+```
+
+`repr(ev)` shows the canonical id; `str(ev)` (or just `ev.description`) gives the
+human-readable description. Neither is parsed for type information — type is
+determined by `isinstance(ev, Event)`.
+
+> **Note on existing corpus ids:** The Bohemia pipeline produced ids in the form
+> `sib:event:X` — the `event:` segment predates the R9 guideline that synthetic
+> entity ids should omit the type segment. The existing data is acceptable because
+> nothing in the system parses that segment for type dispatch. New corpora should
+> follow the guideline: `sib:kings_visit`, not `sib:event:kings_visit`.
+
+These three events establish:
+1. The photograph exists and Irene has it (King's own testimony).
+2. Irene intends to use it as leverage — she will not destroy it.
+3. Holmes has already reasoned that she keeps it hidden at home, not on her person.
+
+### Step 4 — the plan execution events
+
+The subgraph also contains the full Briony Lodge fire-alarm sequence:
+
+```python
+plan_event_ids = {
+    "sib:event:holmes_explains_plan_to_watson",
+    "sib:event:holmes_watson_pace_briony_lodge",
+    "sib:event:holmes_feigns_injury",
+    "sib:event:irene_tends_to_injured_holmes",
+    "sib:event:holmes_signals_need_for_air",
+    "sib:event:watson_tosses_smoke_rocket",
+    "sib:event:holmes_declares_false_alarm",
+    "sib:event:watson_rejoins_holmes",
+}
+
+executed = [
+    e.subject
+    for e in pre.edges_to(
+        "wiki:Sherlock_Holmes", pred_type=Involves, truth="asserted_true"
+    )
+    if e.subject.id in plan_event_ids
+]
+print(f"{len(executed)} plan events confirmed in subgraph")
+# → 7 plan events confirmed in subgraph
+```
+
+Seven of the eight plan-execution events are reachable via Holmes's Involves
+edges (the eighth, `watson_tosses_smoke_rocket`, involves Watson only). The
+plan was designed specifically to make Irene reveal the photograph's hiding
+place by instinct (Holmes explains this to Watson in
+`holmes_explains_plan_to_watson`). The execution is complete. A rule-based
+inference engine with the right `Rule(φ ⇒ ψ)` declaration could derive
+`Possesses(Irene, photograph)` from this evidence — but none exists yet.
+
+### Step 5 — confirm with the full graph (spoiler check, not a proof)
+
+```python
+full = load_bohemia_graph(warn=False)
+
+full_possesses = full.edges_from(
+    "wiki:Irene_Adler", pred_type=Possesses, truth="asserted_true"
+)
+print([e.object_.display_name for e in full_possesses])
+# → ["Irene Adler's purse", "Irene Adler's watch", "Irene Adler's photograph",
+#    "male costume"]
+```
+
+`Possesses: Irene_Adler → irene_adlers_photograph` appears in the full graph
+at sentence 511, extracted after Holmes observes her reaction to the smoke
+rocket. The evidence assembled from the pre-cutoff subgraph is sufficient to
+support that conclusion — but assembling evidence and deriving a new statement
+are different operations. The latter requires rule declarations and an inference
+engine that this project does not yet have.
 
 ---
 
@@ -65,6 +220,8 @@ print([p.display_name for p in people if p])
 ```python
 from ner_20260608.holmes_schema import Involves, Event
 
+# No truth= arg: includes all truth statuses (asserted_true, hypothetical, disputed…).
+# bfs() and transitive_closure() default to asserted_true only — see their signatures.
 irene_events = g.edges_to("wiki:Irene_Adler", pred_type=Involves)
 for e in irene_events:
     ev = g.get(e.subject.id)
@@ -72,14 +229,34 @@ for e in irene_events:
         print(ev.description)
 ```
 
-### Transitive location — Baker Street is in England
+### Transitive location — 221B Baker Street is in London
+
+The LLM-extracted JSONL graph has sparse `LocatedIn` coverage. The manual instance
+graph in `scandal_instances.py` has the full geographic chain. Use
+`Graph.from_module` to query it:
+
+> **Note:** `scandal_instances.py` lives in the source repo under `src/` and is
+> not shipped in the wheel. On a clean install, `import scandal_instances` will
+> fail — clone the repo and add `src/` to `sys.path`, or run examples from the
+> repo root with `pdm run python`.
 
 ```python
+import sys, importlib
+import scandal_instances as si   # repo only — not in wheel; see note above
+from ner_20260608.graph import Graph
 from ner_20260608.holmes_schema import LocatedIn
 
-reachable = g.transitive_closure("place:Baker_Street_221B", LocatedIn)
-print(reachable)   # {'place:London', 'place:England', ...}
+g_manual = Graph.from_module(si)
+reachable = g_manual.transitive_closure("wiki:221B_Baker_Street", LocatedIn)
+print(reachable)   # {'wiki:London'}
+# (Briony Lodge in St. John's Wood, which is in London, is reachable via
+#  a two-hop chain — transitive_closure follows it automatically.)
 ```
+
+Location ids follow the same authority as Person ids: wiki-anchored entities use
+the `wiki:` prefix; unanchored ones (extracted without a matching wiki article)
+use the `place:` corpus prefix. `_canonicalize_id` normalises full Baker Street
+Wiki URLs to `wiki:X` automatically, so both forms work in `g.get()` and traversal.
 
 ### Filter by truth_status — find disputed or hypothetical facts
 
@@ -119,9 +296,8 @@ from ner_20260608.holmes_schema import DisguisedAs, HasTrueIdentity
 
 for inst in g.by_id.values():
     if isinstance(inst, DisguisedAs):
-        persona = g.describe(inst.object_.id)
-        person = g.describe(inst.subject.id)
-        print(f"{person}  disguised as  {persona}  [{inst.truth_status.value}]")
+        print(f"{inst.subject}  disguised as  {inst.object_}  [{inst.truth_status.value}]")
+        # → Sherlock Holmes  disguised as  Nonconformist Clergyman  [asserted_true]
 ```
 
 ### Subgraph export — serialize neighbors to JSON
@@ -150,7 +326,7 @@ def subgraph_json(g, seed_ids, max_hops=2):
             nodes.append({
                 "id": inst.id,
                 "type": type(inst).__name__,
-                "label": getattr(inst, "display_name", inst.id),
+                "label": str(inst),
             })
     return json.dumps({"nodes": nodes, "edges": edges}, indent=2)
 
@@ -387,12 +563,7 @@ def find_by_type(type_name: str) -> list[dict]:
     results = []
     for eid, inst in g.by_id.items():
         if type(inst).__name__ == type_name:
-            results.append({
-                "id": eid,
-                "label": getattr(inst, "display_name", None)
-                         or getattr(inst, "description", None)
-                         or eid,
-            })
+            results.append({"id": eid, "label": str(inst)})
     return results
 
 
@@ -456,7 +627,7 @@ g = Graph([a, b, knows])
 
 ## Adding a predicate to the schema
 
-Add the class to `holmes_schema.py` and call `model_rebuild()` at the bottom:
+Add the class to `holmes_schema.py`:
 
 ```python
 class Employs(BaseStatement, ProvenanceMixin):
@@ -465,9 +636,18 @@ class Employs(BaseStatement, ProvenanceMixin):
     object_: Person
 ```
 
-Then include it in the `model_rebuild()` loop at the bottom of the file.
-The loader will pick it up automatically via the `_PREDICATE_CLASSES` dict in
-`loader.py` (it scans the schema module at import time).
+Two separate mechanisms must both see the new class:
+
+1. **`model_rebuild()` loop** (bottom of `holmes_schema.py`) — Pydantic requires
+   this to resolve forward references between classes. Omitting it causes
+   `ValidationError` at construction time, not import time.
+
+2. **`_PREDICATE_CLASSES` scan** (`loader.py`) — built automatically at import time
+   by scanning `holmes_schema` for `BaseStatement` subclasses. No manual step
+   needed; just make sure the class is in `holmes_schema.py` before the loader
+   imports it.
+
+So the only manual step is adding `Employs` to the `model_rebuild()` list.
 
 ---
 
@@ -512,7 +692,7 @@ Example usage:
 ```bash
 # Single-line label for an entity
 python -m ner_20260608 describe wiki:Irene_Adler
-# => Person(Irene Adler)
+# => Irene Adler
 
 # All asserted-true edges out of a node
 python -m ner_20260608 edges-from wiki:Irene_Adler

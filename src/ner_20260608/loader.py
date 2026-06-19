@@ -12,6 +12,7 @@ import json
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import get_type_hints
 
 from . import holmes_schema as _schema
 from .holmes_schema import (
@@ -29,13 +30,17 @@ _NER_TYPE_TO_CLASS: dict[str, type[EntityInstance]] = {
     "person": Person,
     "place": Location,
     "object": Object,
-    "organization": Location,
-    "other": Object,
+    "other": Object,   # deliberate catch-all for uncategorised pipeline entities
 }
 
 
-def _entity_class(ner_type: str) -> type[EntityInstance]:
-    return _NER_TYPE_TO_CLASS.get(ner_type.lower(), Object)
+def _entity_class(ner_type: str) -> type[EntityInstance] | None:
+    """Return the EntityInstance subclass for a NER type string, or None if unmapped.
+
+    Callers must warn and skip on None — do not silently coerce unmapped types to
+    Object, as that can produce downstream domain/range violations.
+    """
+    return _NER_TYPE_TO_CLASS.get(ner_type.lower())
 
 
 _PREDICATE_CLASSES: dict[str, type[BaseStatement]] = {
@@ -52,8 +57,15 @@ def _predicate_class(name: str) -> type[BaseStatement] | None:
 
 
 def _is_higher_order(pred_cls: type[BaseStatement]) -> bool:
-    """Return True if subject or object_ is annotated as BaseStatement."""
-    hints = pred_cls.__annotations__
+    """Return True if subject or object_ is annotated as BaseStatement.
+
+    Uses get_type_hints() rather than __annotations__ so inherited field
+    annotations are visible and forward references are resolved.
+    """
+    try:
+        hints = get_type_hints(pred_cls)
+    except Exception:
+        hints = pred_cls.__annotations__
     for fname in ("subject", "object_"):
         ann = hints.get(fname)
         if ann is BaseStatement or ann is _schema.BaseStatement:
@@ -94,12 +106,20 @@ class InstanceSet:
 
 
 def _hydrate_entities(records: list[dict], iset: InstanceSet) -> None:
+    # entity_id and the wiki: / place: prefix come from the upstream extraction
+    # pipeline; this loader does not canonicalize or validate them.
     for rec in records:
         ner_type = rec.get("type", "other")
         cls = _entity_class(ner_type)
         entity_id = rec.get("entity_id") or rec.get("id")
         if not entity_id:
             iset.warnings.append(f"entity record missing id: {rec!r:.120}")
+            continue
+        if cls is None:
+            iset.warnings.append(
+                f"entity {entity_id!r}: unmapped NER type {ner_type!r} — skipping; "
+                "add a mapping to _NER_TYPE_TO_CLASS or a new entity type to the schema"
+            )
             continue
         try:
             inst = cls(
@@ -159,12 +179,24 @@ def _hydrate_moments(records: list[dict], iset: InstanceSet) -> None:
         iset.add(inst)
 
 
-def _truth_status(raw: str | None) -> TruthStatus:
+def _truth_status(
+    raw: str | None,
+    # warnings_list and triplet_id are optional so bare _truth_status(raw) works
+    # in tests; the real loader path always supplies both via _build_predicate_kwargs.
+    warnings_list: list[str] | None = None,
+    triplet_id: str = "?",
+) -> TruthStatus:
     if raw is None:
         return TruthStatus.HYPOTHETICAL
     try:
         return TruthStatus(raw)
     except ValueError:
+        if warnings_list is not None:
+            warnings_list.append(
+                f"triplet {triplet_id!r}: unrecognised truth_status {raw!r} — "
+                "defaulting to HYPOTHETICAL; this triplet will be invisible to "
+                "asserted-graph traversals (bfs, transitive_closure, MCP tools)"
+            )
         return TruthStatus.HYPOTHETICAL
 
 
@@ -178,7 +210,11 @@ def _build_predicate_kwargs(rec: dict, subject: EntityInstance, object_: EntityI
 
     kwargs: dict = dict(
         id=rec["id"],
-        truth_status=_truth_status(rec.get("truth_status")),
+        truth_status=_truth_status(
+            rec.get("truth_status"),
+            warnings_list=iset.warnings,
+            triplet_id=rec.get("id", "?"),
+        ),
         subject=subject,
         object_=object_,
     )
@@ -216,11 +252,39 @@ def _hydrate_triplets(records: list[dict], iset: InstanceSet) -> None:
             continue
         _hydrate_one_triplet(rec, pred_cls, iset)
 
-    for rec in deferred:
-        pred_name = rec.get("predicate", "")
-        pred_cls = _predicate_class(pred_name)
-        if pred_cls is not None:
+    # Fixpoint: retry higher-order predicates until no new referents are added.
+    # One pass handles KnewAt → Knows; two handles Contradicts → KnewAt → Knows;
+    # and so on for arbitrarily deep chains (schema R8 sets no depth limit).
+    # Termination is keyed on whether the deferred set shrank (not on global
+    # iset.by_id growth, which would re-attempt genuinely unresolvable triplets
+    # on every pass until unrelated chains exhaust).
+    while deferred:
+        remaining = []
+        for rec in deferred:
+            pred_name = rec.get("predicate", "")
+            pred_cls = _predicate_class(pred_name)
+            if pred_cls is None:
+                continue
+            subject_id = rec.get("subject_id")
+            object_id = rec.get("object_id")
+            if (subject_id and iset.get(subject_id) is None) or (
+                object_id and iset.get(object_id) is None
+            ):
+                remaining.append(rec)
+                continue
             _hydrate_one_triplet(rec, pred_cls, iset)
+        if len(remaining) == len(deferred):
+            for rec in remaining:
+                trip_id = rec.get("id", "?")
+                subject_id = rec.get("subject_id")
+                object_id = rec.get("object_id")
+                iset.warnings.append(
+                    f"higher-order triplet {trip_id!r}: referent(s) "
+                    f"subject={subject_id!r} object={object_id!r} "
+                    "unresolvable after fixpoint — skipping"
+                )
+            break
+        deferred = remaining
 
 
 def _hydrate_one_triplet(rec: dict, pred_cls: type[BaseStatement], iset: InstanceSet) -> None:
@@ -253,15 +317,28 @@ def load_instances(
     triplets: Path | None = None,
     *,
     warn: bool = True,
+    sentence_cutoff: int | None = None,
 ) -> InstanceSet:
-    """Hydrate JSONL files into an InstanceSet."""
+    """Hydrate JSONL files into an InstanceSet.
+
+    sentence_cutoff — if given, only triplets whose sentence_ids are all
+    strictly less than this value are loaded.  Use this to build a
+    temporally-bounded subgraph (e.g. everything up to but not including
+    Holmes's revelation at sentence 485).
+    """
     iset = InstanceSet()
 
     _hydrate_entities(_load_jsonl(entities), iset)
     _hydrate_events(_load_jsonl(events), iset)
     _hydrate_moments(_load_jsonl(moments), iset)
     if triplets is not None and triplets.exists():
-        _hydrate_triplets(_load_jsonl(triplets), iset)
+        raw = _load_jsonl(triplets)
+        if sentence_cutoff is not None:
+            raw = [
+                r for r in raw
+                if not r.get("sentence_ids") or max(r["sentence_ids"]) < sentence_cutoff
+            ]
+        _hydrate_triplets(raw, iset)
 
     if warn and iset.warnings:
         for w in iset.warnings:
@@ -277,9 +354,14 @@ def load_graph(
     triplets: Path | None = None,
     *,
     warn: bool = True,
+    sentence_cutoff: int | None = None,
 ):
-    """Hydrate JSONL files and return a ready-to-use Graph."""
+    """Hydrate JSONL files and return a ready-to-use Graph.
+
+    sentence_cutoff — see load_instances.
+    """
     from .graph import Graph
 
-    iset = load_instances(entities, events, moments, triplets, warn=warn)
+    iset = load_instances(entities, events, moments, triplets, warn=warn,
+                          sentence_cutoff=sentence_cutoff)
     return Graph(iset.by_id.values())

@@ -102,7 +102,7 @@ enables higher-order predication without a separate reification mechanism.
 ### Canonical identity
 
 Each instance $v \in V$ carries a distinguished field $v.\text{id} \in \mathcal{I}$,
-where $\mathcal{I}$ is an opaque universe of identifiers. The identity axiom requires:
+where $\mathcal{I}$ is a universe of stable identifiers. The identity axiom requires:
 
 $$\forall\, v, v' \in V:\ v \neq v' \Rightarrow v.\text{id} \neq v'.\text{id}$$
 
@@ -110,15 +110,25 @@ That is, $\text{id}$ is injective on $V$. The identifier is:
 
 - **Assigned at construction** — not derived from any mutable field or external state
 - **Stable** — once assigned, it does not change (consistent with R7)
-- **Opaque** — it carries no type information; type is the exclusive responsibility of $\tau$
+- **Non-dispatch** — the id string is never parsed to recover type; type is the
+  exclusive responsibility of $\tau$ and the Python class hierarchy. Human-readable
+  id schemes (external ontology keys, corpus-namespaced slugs) are permitted as long
+  as no code branches on the string content to determine a type.
 - **Ontology-anchored where possible** — for entity instances that correspond to
   real-world referents, the id should be sourced from or aligned with a community-curated
   authoritative ontology (e.g. Wikidata QIDs, MeSH IDs, a domain-specific authority
   such as Baker Street Wiki). Minting ad-hoc IDs for named entities that have
   established canonical IDs elsewhere is a traceability failure.
 
-In Python, `Instance.id` is a `str` field (typically a UUID or an ontology-authority
-ID) declared before any domain-specific fields and frozen by the model configuration.
+Display is separate from identity. Instances implement `__str__` to return a
+human-readable label — `display_name` for entities that carry one, `description`
+or `label` for synthetic entities, and `ClassName(subject → object)` for predicate
+instances. This presentation string is one-way: it is generated for human
+consumption and is never parsed back to recover an id, type, or field value.
+
+In Python, `Instance.id` is a `str` field (a UUID, an ontology-authority key, or a
+corpus-namespaced slug) declared before any domain-specific fields and frozen by the
+model configuration.
 
 ### Validity constraint
 
@@ -218,6 +228,16 @@ two instances of the same predicate type may have identical `subject`, `object_`
 `truth_status` and differ only in provenance. Both are valid, distinct members of $V$
 — their ids differ.
 
+This property holds as stated for **pipeline-extracted** instances, where the
+extraction pipeline assigns a unique id per extraction event. It does not hold for
+**canonical-fact** construction via `statement_id()`, which is content-addressed on
+`(subject, predicate_name, object)` alone. In that pattern, re-constructing the same
+fact (e.g. from a different paragraph) yields the same id deliberately — re-extraction
+is treated as confirmation, not as a new member of $V$. Use `statement_id()` when you
+want canonical standing facts that collapse duplicates; assign unique ids per
+extraction event when you want a full audit trail of every derivation. The two
+patterns should not be mixed within a single loading pass.
+
 **Provenance does not replace truth_status.** A claim with high-confidence provenance
 from a reliable source may still be `disputed` (if contradicted) or `retracted` (if
 overturned). Truth status is the graph's current epistemic commitment; provenance is
@@ -243,7 +263,7 @@ Use these terms consistently throughout the book. Do not treat them as synonyms.
 | **Schema**            | The tuple $(T,\ \Phi)$ together with trait declarations. Fixed at graph-design time. |
 | **Instance graph**    | The tuple $(V,\ \tau)$. Populated at ingestion or reasoning time. |
 | **Asserted graph**    | The subset of $E$ where `truth_status = asserted_true`, indexed for traversal. The first-order fact graph. |
-| **Canonical identifier** | The value of $v.\text{id}$ for instance $v \in V$. Globally unique within $V$, assigned at construction, immutable, and opaque — it carries no type information. The Python realization is a `str` field (typically a UUID) on the `Instance` root class. Canonical IDs for real-world entities are sourced from authoritative ontologies (community-curated over long periods) rather than minted ad hoc; see the ontology authority declared in the domain section. |
+| **Canonical identifier** | The value of $v.\text{id}$ for instance $v \in V$. Globally unique within $V$, assigned at construction, and immutable. The Python realization is a `str` field on the `Instance` root class. For real-world entities, ids are sourced from authoritative ontologies (community-curated over long periods) rather than minted ad hoc; see the ontology authority declared in the domain section. The id is never parsed to recover type or structure — type is the exclusive responsibility of $\tau$. Human-readable display is the responsibility of `__str__`, which is a separate, one-way presentation artifact. |
 | **Provenance**        | The set of fields $\Pi(p) \subseteq \Phi(p)$ that record how a predicate instance was produced: its source, extraction method, and any confidence scores. Provenance belongs to the instance (R2), is declared in the field schema (R10), and is distinct from truth status, which records the graph's current epistemic commitment to the proposition. |
 
 ### Terms to avoid or use carefully
@@ -314,15 +334,36 @@ over* a proposition (knowing it, disputing it, supporting it), not for *annotati
 one. Using it for annotation reintroduces exactly the overhead this model exists to
 reject (see Non-Goals: *Not RDF/OWL*).
 
-**R9. Every instance has a canonical, opaque, stable identifier.** The `id` field is
-assigned at construction and does not change. It carries no type information — type
-is the exclusive responsibility of $\tau$. For entity instances that correspond to
-real-world referents, the id should be sourced from or aligned with an authoritative
-ontology (community-curated over time, e.g. Wikidata QIDs, MeSH IDs, or a
-domain-specific authority such as Baker Street Wiki). Minting ad-hoc IDs for named
-entities that have established canonical IDs elsewhere is a traceability failure. Any
-pattern that encodes entity type, predicate type, or relationship structure into an
-identifier string and parses that string to recover it is a violation of both R6 and R9.
+**R9. Every instance has a canonical, stable identifier; display is separate.** The
+`id` field is assigned at construction and does not change. For entity instances that
+correspond to real-world referents, the id should be sourced from or aligned with an
+authoritative ontology (community-curated over time, e.g. Wikidata QIDs, MeSH IDs,
+or a domain-specific authority such as Baker Street Wiki). Minting ad-hoc IDs for
+named entities that have established canonical IDs elsewhere is a traceability failure.
+
+The id string must never be parsed to recover type or relationship structure — type
+is the exclusive responsibility of $\tau$ and the Python class hierarchy. Any code
+that branches on id content to determine a type is a violation of R6 and R9.
+
+Human-readable id schemes (external ontology keys such as `wiki:Sherlock_Holmes`,
+corpus-namespaced slugs) are permitted as long as no code parses them for type
+dispatch. Synthetic internal entities (events, moments, plans) with no external
+ontology anchor should use corpus-namespaced slugs without a type segment
+(e.g. `sib:kings_visit`, not `sib:event:kings_visit`).
+
+*Content-addressed statement ids* are a deliberate exception: `statement_id()`
+embeds the predicate name and participant ids (e.g.
+`stmt:wiki:Holmes:Knows:wiki:Watson`) for traceability and idempotent
+construction. The embedded predicate name is there for debugging, not dispatch —
+nothing in the system parses it back to determine a type. This is structurally
+different from the discouraged synthetic-entity pattern, where the type segment
+carries no information not already provided by Python's class hierarchy.
+
+Human-readable display is the responsibility of `__str__`, not `id`. `__str__`
+returns `display_name` for entities that carry one, `description`/`label` for
+synthetic entities, and `ClassName(subject → object)` for predicate instances.
+It is a one-way presentation artifact — generated for human consumption, never
+parsed back.
 
 **R10. Every predicate type declares a provenance sub-schema.** $\Phi(p)$ must include
 at minimum `source` and `extraction_method` for all $p \in T_\text{pred}$. These
@@ -377,8 +418,11 @@ description logic, that is scope creep.
 
 **Not a stringly-typed system.** Types are Python classes, not ID prefixes. Domain
 and range enforcement is the job of the Python type system and Pydantic, not of
-string parsing. Any pattern that encodes type information inside an identifier
-string and then parses that string to enforce constraints is a violation of R6.
+string parsing. Any code that parses an identifier string to determine or dispatch
+on a type is a violation of R6. Human-readable id schemes (external ontology keys,
+corpus-namespaced slugs) are not themselves a violation — the violation is parsing
+them for type dispatch. Human-readable display is the responsibility of `__str__`,
+not `id`.
 
 ---
 
@@ -388,7 +432,7 @@ The worked example uses the Sherlock Holmes canon as domain.
 
 - **Ontology authority**: Baker Street Wiki (https://bakerstreet.fandom.com)
 - **Schema construction method**: inductive — built by annotating stories, not pre-designed
-- **Primary stories**: "A Scandal in Bohemia", "The Speckled Band"
+- **Primary stories**: "A Scandal in Bohemia" (complete); "The Speckled Band" (planned)
 - **Provisional entity types**: `Person`, `Location`, `Object`, `Document`,
   `Moment`, `Event`, `Persona`, `Plan`
 - **Higher-order predicates**: `KnewAt`, `Contradicts` — these take `BaseStatement`

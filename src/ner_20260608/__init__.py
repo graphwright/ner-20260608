@@ -34,23 +34,33 @@ def data_path(filename: str) -> Path:
     return Path(files(__package__).joinpath("data", filename))
 
 
-def load_bohemia_instances(*, warn: bool = True) -> InstanceSet:
-    """Load the bundled Bohemia JSONL artifacts into an ``InstanceSet``."""
+def load_bohemia_instances(*, warn: bool = True, sentence_cutoff: int | None = None) -> InstanceSet:
+    """Load the bundled Bohemia JSONL artifacts into an ``InstanceSet``.
+
+    sentence_cutoff — if given, only triplets whose sentence_ids are all
+    strictly less than this value are loaded.  See ``load_instances``.
+    """
     return load_instances(
         entities=data_path("bohemia_entities.jsonl"),
         events=data_path("bohemia_events.jsonl"),
         moments=data_path("bohemia_moments.jsonl"),
         triplets=data_path("bohemia_triplets.jsonl"),
         warn=warn,
+        sentence_cutoff=sentence_cutoff,
     )
 
 
-def load_bohemia_graph(*, warn: bool = True) -> Graph:
-    """Load the bundled Bohemia JSONL artifacts into a ready-to-query ``Graph``."""
+def load_bohemia_graph(*, warn: bool = True, sentence_cutoff: int | None = None) -> Graph:
+    """Load the bundled Bohemia JSONL artifacts into a ready-to-query ``Graph``.
+
+    sentence_cutoff — if given, only triplets whose sentence_ids are all
+    strictly less than this value are loaded.  See ``load_instances``.
+    """
     return load_graph(
         entities=data_path("bohemia_entities.jsonl"),
         events=data_path("bohemia_events.jsonl"),
         moments=data_path("bohemia_moments.jsonl"),
         triplets=data_path("bohemia_triplets.jsonl"),
         warn=warn,
+        sentence_cutoff=sentence_cutoff,
     )

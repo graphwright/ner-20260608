@@ -92,6 +92,55 @@ class TestGetInverse:
         assert get_inverse(AssociatedWith) is None
 
 
+class TestStrRepr:
+    """str() is the human-readable presentation layer; repr() shows the canonical id."""
+
+    def test_person_str_is_display_name(self):
+        p = Person(id="wiki:Holmes", display_name="Sherlock Holmes")
+        assert str(p) == "Sherlock Holmes"
+
+    def test_person_repr_contains_id(self):
+        p = Person(id="wiki:Holmes", display_name="Sherlock Holmes")
+        assert "wiki:Holmes" in repr(p)
+
+    def test_location_str_is_display_name(self):
+        loc = Location(id="wiki:London", display_name="London")
+        assert str(loc) == "London"
+
+    def test_event_str_is_description(self):
+        e = Event(id="sib:kings_visit", story_id="bohemia", description="The King visits Baker Street.")
+        assert str(e) == "The King visits Baker Street."
+
+    def test_moment_str_is_label(self):
+        m = Moment(id="sib:morning", story_id="bohemia", label="Morning of 21 March")
+        assert str(m) == "Morning of 21 March"
+
+    def test_plan_str_is_description(self):
+        plan = Plan(id="sib:plan", story_id="bohemia", description="Stage a fire alarm")
+        assert str(plan) == "Stage a fire alarm"
+
+    def test_base_statement_str_fallback(self):
+        b = BaseStatement(id="stmt:x")
+        assert str(b) == "BaseStatement"
+
+    def test_predicate_str_shows_subject_and_object(self):
+        h = Person(id="wiki:Holmes", display_name="Sherlock Holmes")
+        w = Person(id="wiki:Watson", display_name="Dr. Watson")
+        k = Knows(id="stmt:1", subject=h, object_=w, **_PROV)
+        result = str(k)
+        assert "Knows" in result
+        assert "Sherlock Holmes" in result
+        assert "Dr. Watson" in result
+        assert "→" in result
+
+    def test_str_not_parsed_for_type(self):
+        """The type must be determined by isinstance, not by parsing str()."""
+        h = Person(id="wiki:Holmes", display_name="Sherlock Holmes")
+        assert isinstance(h, Person)
+        # str() is for display only — never use it for type dispatch
+        assert str(h) == h.display_name
+
+
 class TestEntityClasses:
     def test_person_construction(self):
         p = Person(id="wiki:Holmes", display_name="Sherlock Holmes")

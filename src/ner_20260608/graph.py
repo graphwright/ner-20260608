@@ -12,6 +12,7 @@ Typical usage:
 """
 
 from __future__ import annotations
+import warnings
 from collections import defaultdict
 from typing import Iterable
 
@@ -67,6 +68,12 @@ class Graph:
         for inst in instances:
             if not _is_entity(inst):
                 continue
+            if inst.id in self.by_id:
+                warnings.warn(
+                    f"Graph: id collision on {inst.id!r} — overwriting; "
+                    "use unique ids per extraction or statement_id() for canonical facts",
+                    stacklevel=2,
+                )
             self.by_id[inst.id] = inst
             if _is_statement(inst):
                 self.out_edges[inst.subject.id].append(inst)
@@ -169,17 +176,9 @@ class Graph:
         inst = self.get(entity_id)
         if inst is None:
             return f"<not found: {entity_id}>"
-        if _is_statement(inst):
-            subj = getattr(inst.subject, 'display_name', inst.subject.id)
-            obj = getattr(inst.object_, 'display_name', inst.object_.id)
-            return f"{type(inst).__name__}({subj} → {obj})"
-        name = getattr(inst, 'display_name', None) or getattr(inst, 'label', None) or entity_id
-        return f"{type(inst).__name__}({name})"
+        return str(inst)
 
     def print_edges(self, edges: list, indent: int = 2) -> None:
         pad = ' ' * indent
         for e in edges:
-            subj = getattr(e.subject, 'display_name', e.subject.id)
-            obj = getattr(e.object_, 'display_name', None) or self.describe(e.object_.id)
-            ts = e.truth_status.value
-            print(f"{pad}{type(e).__name__}:  {subj}  →  {obj}  [{ts}]")
+            print(f"{pad}{e}  [{e.truth_status.value}]")

@@ -42,7 +42,11 @@ def person_graph():
 
 @pytest.fixture(scope="module")
 def location_graph():
-    """Baker Street -[LocatedIn]-> London -[LocatedIn]-> England."""
+    """Baker Street -[LocatedIn]-> London -[LocatedIn]-> England.
+
+    Uses synthetic place: ids (not real corpus entities) to test traversal logic
+    in isolation from id-canonicalization concerns.
+    """
     baker = Location(id="place:Baker_Street", display_name="Baker Street")
     london = Location(id="place:London", display_name="London")
     england = Location(id="place:England", display_name="England")
@@ -104,6 +108,24 @@ class TestCanonicalizeId:
 
     def test_partial_prefix_unchanged(self):
         assert _canonicalize_id("https://bakerstreet.fandom.com/") == "https://bakerstreet.fandom.com/"
+
+
+# ---- Graph id-collision warning ----
+
+class TestIdCollision:
+    def test_collision_warns(self):
+        p1 = Person(id="wiki:Holmes", display_name="Sherlock Holmes")
+        p2 = Person(id="wiki:Holmes", display_name="Sherlock Holmes (duplicate)")
+        with pytest.warns(UserWarning, match="id collision"):
+            Graph([p1, p2])
+
+    def test_no_collision_no_warning(self):
+        p1 = Person(id="wiki:Holmes", display_name="Sherlock Holmes")
+        p2 = Person(id="wiki:Watson", display_name="Dr. Watson")
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            Graph([p1, p2])  # should not raise
 
 
 # ---- Graph.get ----
@@ -253,12 +275,13 @@ class TestTransitiveClosure:
 class TestDescribe:
     def test_entity_describe(self, person_graph):
         result = person_graph.describe("wiki:Sherlock_Holmes")
-        assert "Sherlock Holmes" in result
-        assert "not found" not in result
+        assert result == "Sherlock Holmes"
 
     def test_statement_describe(self, person_graph):
         result = person_graph.describe("stmt:knows:hw")
         assert "Knows" in result
+        assert "Sherlock Holmes" in result
+        assert "John Watson" in result
         assert "not found" not in result
 
     def test_missing_describe(self, person_graph):
@@ -268,4 +291,4 @@ class TestDescribe:
 
     def test_full_url_describe(self, person_graph):
         result = person_graph.describe("https://bakerstreet.fandom.com/wiki/Sherlock_Holmes")
-        assert "not found" not in result
+        assert result == "Sherlock Holmes"

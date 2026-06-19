@@ -56,29 +56,60 @@ class EntityInstance(BaseModel):
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.id!r})"
 
+    def __str__(self) -> str:
+        return self.id
+
 
 def statement_id(subject_id: str, predicate_name: str, object_id: str) -> str:
+    """Content-addressed id for a predicate instance.
+
+    The predicate name and participant ids are embedded for traceability and
+    idempotent construction — not for type dispatch. This is distinct from the
+    discouraged synthetic-entity pattern (sib:event:kings_visit): here the
+    human-readable components serve a functional purpose (deduplication, readable
+    debugging) and nothing in the system parses the string to recover a type.
+    """
     return f"stmt:{subject_id}:{predicate_name}:{object_id}"
 
 
 class BaseStatement(EntityInstance):
     truth_status: TruthStatus = TruthStatus.HYPOTHETICAL
 
+    def __str__(self) -> str:
+        subj = getattr(self, 'subject', None)
+        obj = getattr(self, 'object_', None)
+        cls = type(self).__name__
+        if subj is not None and obj is not None:
+            return f"{cls}({subj} → {obj})"
+        return cls
+
 
 class Person(EntityInstance):
     display_name: str
+
+    def __str__(self) -> str:
+        return self.display_name
 
 
 class Persona(EntityInstance):
     display_name: str
 
+    def __str__(self) -> str:
+        return self.display_name
+
 
 class Location(EntityInstance):
     display_name: str
 
+    def __str__(self) -> str:
+        return self.display_name
+
 
 class Object(EntityInstance):
     display_name: str
+
+    def __str__(self) -> str:
+        return self.display_name
 
 
 class Document(EntityInstance):
@@ -86,10 +117,16 @@ class Document(EntityInstance):
     story_id: str
     document_type: Literal["letter", "photograph", "telegram", "newspaper", "other"]
 
+    def __str__(self) -> str:
+        return self.display_name
+
 
 class Event(EntityInstance):
     story_id: str
     description: str
+
+    def __str__(self) -> str:
+        return self.description
 
 
 class Moment(EntityInstance):
@@ -97,12 +134,18 @@ class Moment(EntityInstance):
     label: str
     narrator: Person | None = None
 
+    def __str__(self) -> str:
+        return self.label
+
 
 class Plan(EntityInstance):
     provisional: ClassVar[bool] = True
     story_id: str
     description: str
     goal: str | None = None
+
+    def __str__(self) -> str:
+        return self.description
 
 
 class ProvenanceMixin(BaseModel):

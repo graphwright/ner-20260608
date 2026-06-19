@@ -36,14 +36,16 @@ class TestEntityClass:
     def test_place(self):
         assert _entity_class("place") is Location
 
-    def test_organization(self):
-        assert _entity_class("organization") is Location
+    def test_organization_is_unmapped(self):
+        # organization is not in the schema; warn and skip rather than misroute to Location
+        assert _entity_class("organization") is None
 
     def test_other(self):
         assert _entity_class("other") is Object
 
-    def test_unknown_defaults_to_object(self):
-        assert _entity_class("alien") is Object
+    def test_unknown_returns_none(self):
+        # unmapped types return None; callers warn and skip
+        assert _entity_class("alien") is None
 
     def test_case_insensitive(self):
         assert _entity_class("PERSON") is Person
@@ -94,6 +96,19 @@ class TestTruthStatusHelper:
 
     def test_invalid_string_returns_hypothetical(self):
         assert _truth_status("nonsense") == TruthStatus.HYPOTHETICAL
+
+    def test_invalid_string_warns_via_list(self):
+        warnings: list[str] = []
+        result = _truth_status("typo_asserted", warnings_list=warnings, triplet_id="stmt:x")
+        assert result == TruthStatus.HYPOTHETICAL
+        assert len(warnings) == 1
+        assert "typo_asserted" in warnings[0]
+        assert "stmt:x" in warnings[0]
+
+    def test_none_does_not_warn(self):
+        warnings: list[str] = []
+        _truth_status(None, warnings_list=warnings)
+        assert warnings == []
 
 
 class TestInstanceSet:
@@ -154,6 +169,17 @@ class TestHydrateEntities:
         _hydrate_entities([{"type": "person", "canonical": "Nameless"}], iset)
         assert len(iset.warnings) == 1
         assert len(iset.by_id) == 0
+
+    def test_unmapped_ner_type_warns_and_skips(self):
+        iset = InstanceSet()
+        _hydrate_entities([{
+            "type": "organization",
+            "entity_id": "org:scotland_yard",
+            "canonical": "Scotland Yard",
+        }], iset)
+        assert len(iset.warnings) == 1
+        assert "unmapped" in iset.warnings[0]
+        assert iset.get("org:scotland_yard") is None
 
     def test_wiki_url_indexed(self):
         iset = InstanceSet()
@@ -285,6 +311,19 @@ class TestHydrateTriplets:
         }], iset)
         assert any("object" in w for w in iset.warnings)
 
+    def test_bad_truth_status_warns_via_iset(self):
+        iset = self._base_iset()
+        _hydrate_triplets([{
+            "id": "stmt:knows:1",
+            "predicate": "Knows",
+            "subject_id": "wiki:Holmes",
+            "object_id": "wiki:Watson",
+            "truth_status": "typo_asserted_true",
+            **_PROV,
+        }], iset)
+        assert any("truth_status" in w for w in iset.warnings)
+        assert iset.get("stmt:knows:1") is not None  # still added, with HYPOTHETICAL
+
     def test_higher_order_predicate_hydrated(self):
         iset = self._base_iset()
         # Pre-populate two statements for Contradicts to reference
@@ -306,6 +345,75 @@ class TestHydrateTriplets:
         assert isinstance(inst, Contradicts)
         assert inst.subject is s1
         assert inst.object_ is s2
+
+
+    def test_deep_higher_order_fixpoint(self):
+        """Contradicts pointing at a KnewAt requires two deferred passes.
+
+        File order: Contradicts first (object_ = KnewAt, not yet built),
+        then KnewAt (object_ = Knows, already in iset from pre-seeding).
+        The fixpoint loop resolves Contradicts in the second iteration.
+        """
+        iset = self._base_iset()
+        h = iset.get("wiki:Holmes")
+        w = iset.get("wiki:Watson")
+        knows = Knows(id="stmt:knows:1", subject=h, object_=w,
+                      truth_status=TruthStatus.ASSERTED_TRUE, **_PROV)
+        moment = Moment(id="moment:1", story_id="bohemia", label="Opening")
+        iset.add(knows)
+        iset.add(moment)
+
+        _hydrate_triplets([
+            {   # Contradicts comes first — its object_ (KnewAt) isn't built yet
+                "id": "stmt:contradicts:1",
+                "predicate": "Contradicts",
+                "subject_id": "stmt:knows:1",
+                "object_id": "stmt:knew:1",
+                **_PROV,
+            },
+            {   # KnewAt comes second — its object_ (Knows) is already in iset
+                "id": "stmt:knew:1",
+                "predicate": "KnewAt",
+                "subject_id": "wiki:Holmes",
+                "object_id": "stmt:knows:1",
+                "moment_id": "moment:1",
+                **_PROV,
+            },
+        ], iset)
+        assert iset.get("stmt:knew:1") is not None, "KnewAt should be hydrated"
+        assert iset.get("stmt:contradicts:1") is not None, "Contradicts should resolve in second pass"
+
+    def test_first_order_in_same_call_resolves_before_deferred(self):
+        """Higher-order triplet referencing a first-order triplet in the same
+        _hydrate_triplets call, with the first-order record appearing AFTER
+        the higher-order one in file order.
+
+        The initial pass must build Knows before the deferred loop runs,
+        so KnewAt can resolve in the first deferred iteration.
+        """
+        iset = self._base_iset()
+        iset.add(Moment(id="moment:1", story_id="bohemia", label="Opening"))
+
+        _hydrate_triplets([
+            {   # KnewAt comes first — its object_ (Knows below) isn't built yet
+                "id": "stmt:knew:1",
+                "predicate": "KnewAt",
+                "subject_id": "wiki:Holmes",
+                "object_id": "stmt:knows:1",
+                "moment_id": "moment:1",
+                **_PROV,
+            },
+            {   # Knows comes second in file order — first-order, built in initial pass
+                "id": "stmt:knows:1",
+                "predicate": "Knows",
+                "subject_id": "wiki:Holmes",
+                "object_id": "wiki:Watson",
+                "truth_status": "asserted_true",
+                **_PROV,
+            },
+        ], iset)
+        assert iset.get("stmt:knows:1") is not None, "Knows should be hydrated in initial pass"
+        assert iset.get("stmt:knew:1") is not None, "KnewAt should resolve in first deferred iteration"
 
 
 class TestLoadInstances:
