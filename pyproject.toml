@@ -24,6 +24,7 @@ includes = [
     "src/ner_20260608/data/*.jsonl",
     "src/graph.py",
     "src/loader.py",
+    "docs/cookbook.md",
 ]
 
 [dependency-groups]
