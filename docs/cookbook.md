@@ -474,7 +474,10 @@ The loader will pick it up automatically via the `_PREDICATE_CLASSES` dict in
 ## Minimal CLI
 
 Add this to `src/ner_20260608/__main__.py` so the package can be invoked as
-`python -m ner_20260608 describe wiki:Irene_Adler`:
+`python -m ner_20260608 describe wiki:Irene_Adler`.
+
+> **Note:** If `python` is not on your PATH (e.g. in a PDM-managed environment),
+> use `pdm run python -m ner_20260608 ...` instead.
 
 ```python
 import sys
@@ -502,4 +505,19 @@ def main():
 
 if __name__ == "__main__":
     main()
+```
+
+Example usage:
+
+```bash
+# Single-line label for an entity
+python -m ner_20260608 describe wiki:Irene_Adler
+# => Person(Irene Adler)
+
+# All asserted-true edges out of a node
+python -m ner_20260608 edges-from wiki:Irene_Adler
+
+# 2-hop neighbourhood (multiple seed IDs accepted)
+python -m ner_20260608 bfs wiki:Irene_Adler
+python -m ner_20260608 bfs wiki:Sherlock_Holmes wiki:Irene_Adler
 ```
