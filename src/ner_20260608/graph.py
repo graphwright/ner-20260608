@@ -107,8 +107,11 @@ class Graph:
     def bfs(self, seed_ids: list[str], max_hops: int = 3, pred_types=None, truth_values=('asserted_true',)) -> list[set[str]]:
         """BFS from seed_ids. Returns one set per hop layer.
 
-        Traverses outward edges only. The traversed statement instances are also
-        added to layers so higher-order predicates can be followed in later hops.
+        Traverses both outward and inward edges so symmetric predicates (e.g.
+        Knows) and reverse relationships (e.g. Events that Involve a person)
+        are reachable regardless of the direction they were stored. The
+        traversed statement instances are also added to layers so higher-order
+        predicates can be followed in later hops.
         """
         visited: set[str] = set(seed_ids)
         frontier: set[str] = set(seed_ids)
@@ -122,13 +125,19 @@ class Graph:
                         continue
                     if edge.truth_status.value not in truth_values:
                         continue
-                    obj_id = edge.object_.id
-                    if obj_id not in visited:
-                        visited.add(obj_id)
-                        next_frontier.add(obj_id)
-                    if edge.id not in visited:
-                        visited.add(edge.id)
-                        next_frontier.add(edge.id)
+                    for nid in (edge.object_.id, edge.id):
+                        if nid not in visited:
+                            visited.add(nid)
+                            next_frontier.add(nid)
+                for edge in self.in_edges.get(eid, []):
+                    if pred_types and not isinstance(edge, tuple(pred_types)):
+                        continue
+                    if edge.truth_status.value not in truth_values:
+                        continue
+                    for nid in (edge.subject.id, edge.id):
+                        if nid not in visited:
+                            visited.add(nid)
+                            next_frontier.add(nid)
             layers.append(next_frontier)
             frontier = next_frontier
             if not frontier:
