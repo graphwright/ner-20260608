@@ -24,6 +24,19 @@ the worked examples.
 **It anchors the vocabulary.** Once you've defined $\text{Tr}(p)$ formally, "trait"
 has a precise meaning for the rest of the book.
 
+**It makes identity unambiguous.** Two instances that represent the same real-world
+entity must be distinguishable from two instances that represent the same claim at
+different epistemic states. Canonical IDs close off that confusion: each member of
+$V$ has a stable, opaque identifier assigned at construction and never derived from
+its content. Merging, deduplication, and cross-reference all become well-defined
+operations.
+
+**It grounds every claim in its source.** A proposition without provenance is not
+reliable knowledge — it is an unverifiable assertion. When every predicate instance
+carries a declared provenance sub-schema, tracing any fact back to its origin is a
+field lookup, not a search. That discipline propagates into ingestion pipelines,
+dispute resolution, and epistemic audits.
+
 ---
 
 ## Formal Definition
@@ -86,6 +99,27 @@ as their subject or object. This is the single relaxation relative to the
 classical graph formalism, where $V$ and $E$ are disjoint sorts. It is what
 enables higher-order predication without a separate reification mechanism.
 
+### Canonical identity
+
+Each instance $v \in V$ carries a distinguished field $v.\text{id} \in \mathcal{I}$,
+where $\mathcal{I}$ is an opaque universe of identifiers. The identity axiom requires:
+
+$$\forall\, v, v' \in V:\ v \neq v' \Rightarrow v.\text{id} \neq v'.\text{id}$$
+
+That is, $\text{id}$ is injective on $V$. The identifier is:
+
+- **Assigned at construction** — not derived from any mutable field or external state
+- **Stable** — once assigned, it does not change (consistent with R7)
+- **Opaque** — it carries no type information; type is the exclusive responsibility of $\tau$
+- **Ontology-anchored where possible** — for entity instances that correspond to
+  real-world referents, the id should be sourced from or aligned with a community-curated
+  authoritative ontology (e.g. Wikidata QIDs, MeSH IDs, a domain-specific authority
+  such as Baker Street Wiki). Minting ad-hoc IDs for named entities that have
+  established canonical IDs elsewhere is a traceability failure.
+
+In Python, `Instance.id` is a `str` field (typically a UUID or an ontology-authority
+ID) declared before any domain-specific fields and frozen by the model configuration.
+
 ### Validity constraint
 
 Each instance $v \in V$ carries fields conforming to $\Phi(\tau(v))$.
@@ -128,6 +162,31 @@ Lifecycle: a predicate instance is typically created as `hypothetical` at first
 mention, promoted to `asserted_true` when grounded, and may later become `disputed`
 (conflicting sources) or `retracted` (overturned by new evidence).
 
+### Provenance
+
+Every predicate instance carries a **provenance sub-schema** — a distinguished set
+of fields in $\Phi(p)$ that record how the assertion was produced. The minimum
+provenance fields required for any $p \in T_\text{pred}$ are:
+
+- `source` — the origin of the claim: a text span, document reference, or extraction
+  method identifier
+- `extraction_method` — how the claim was derived: direct quotation, inference, model
+  extraction, manual annotation
+
+Additional provenance fields may be declared per predicate type in $\Phi(p)$. The
+field `narrator_confidence` in the Holmes schema is one such extension.
+
+Provenance fields are instance metadata (R2): they describe how this particular
+assertion was produced, not what the predicate type means. The distinction matters:
+two instances of the same predicate type may have identical `subject`, `object_`, and
+`truth_status` and differ only in provenance. Both are valid, distinct members of $V$
+— their ids differ.
+
+**Provenance does not replace truth_status.** A claim with high-confidence provenance
+from a reliable source may still be `disputed` (if contradicted) or `retracted` (if
+overturned). Truth status is the graph's current epistemic commitment; provenance is
+the audit trail behind that commitment.
+
 ---
 
 ## Vocabulary
@@ -148,6 +207,8 @@ Use these terms consistently throughout the book. Do not treat them as synonyms.
 | **Schema**            | The tuple $(T,\ \Phi)$ together with trait declarations. Fixed at graph-design time. |
 | **Instance graph**    | The tuple $(V,\ \tau)$. Populated at ingestion or reasoning time. |
 | **Asserted graph**    | The subset of $E$ where `truth_status = asserted_true`, indexed for traversal. The first-order fact graph. |
+| **Canonical identifier** | The value of $v.\text{id}$ for instance $v \in V$. Globally unique within $V$, assigned at construction, immutable, and opaque — it carries no type information. The Python realization is a `str` field (typically a UUID) on the `Instance` root class. Canonical IDs for real-world entities are sourced from authoritative ontologies (community-curated over long periods) rather than minted ad hoc; see the ontology authority declared in the domain section. |
+| **Provenance**        | The set of fields $\Pi(p) \subseteq \Phi(p)$ that record how a predicate instance was produced: its source, extraction method, and any confidence scores. Provenance belongs to the instance (R2), is declared in the field schema (R10), and is distinct from truth status, which records the graph's current epistemic commitment to the proposition. |
 
 ### Terms to avoid or use carefully
 
@@ -216,6 +277,22 @@ instance directly, declared in $\Phi$. Higher-order predication is for *predicat
 over* a proposition (knowing it, disputing it, supporting it), not for *annotating*
 one. Using it for annotation reintroduces exactly the overhead this model exists to
 reject (see Non-Goals: *Not RDF/OWL*).
+
+**R9. Every instance has a canonical, opaque, stable identifier.** The `id` field is
+assigned at construction and does not change. It carries no type information — type
+is the exclusive responsibility of $\tau$. For entity instances that correspond to
+real-world referents, the id should be sourced from or aligned with an authoritative
+ontology (community-curated over time, e.g. Wikidata QIDs, MeSH IDs, or a
+domain-specific authority such as Baker Street Wiki). Minting ad-hoc IDs for named
+entities that have established canonical IDs elsewhere is a traceability failure. Any
+pattern that encodes entity type, predicate type, or relationship structure into an
+identifier string and parses that string to recover it is a violation of both R6 and R9.
+
+**R10. Every predicate type declares a provenance sub-schema.** $\Phi(p)$ must include
+at minimum `source` and `extraction_method` for all $p \in T_\text{pred}$. These
+fields are required, not optional — a predicate instance constructed without provenance
+is a schema violation. Downstream consumers that cannot identify the origin of a claim
+cannot audit, dispute, or weight it.
 
 ---
 
