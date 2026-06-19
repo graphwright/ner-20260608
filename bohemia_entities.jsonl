@@ -1,75 +1,112 @@
-{"canonical": "Wilhelm Gottsreich Sigismond von Ormstein", "aliases": ["Wilhelm Gottsreich Sigismond von Ormstein", "Count Von Kramm", "King", "King of Bohemia", "the King", "the King of Bohemia", "Bohemian nobleman", "client", "my client", "the client", "your Majesty"], "type": "person", "wiki_url": "https://bakerstreet.fandom.com/wiki/Wilhelm_von_Ormstein", "entity_id": "wiki:Wilhelm_von_Ormstein"}
-{"canonical": "Sherlock Holmes", "aliases": ["Sherlock Holmes", "Holmes", "the detective"], "type": "person", "wiki_url": "https://bakerstreet.fandom.com/wiki/Sherlock_Holmes", "entity_id": "wiki:Sherlock_Holmes"}
-{"canonical": "Dr Watson", "aliases": ["Dr Watson", "Watson", "narrator", "the narrator", "I", "John", "Doctor"], "type": "person", "wiki_url": "https://bakerstreet.fandom.com/wiki/John_Watson", "entity_id": "wiki:John_Watson"}
-{"canonical": "Irene Adler", "aliases": ["Irene Adler", "Miss Irene Adler", "Miss Irene", "Irene Norton", "the woman", "woman", "lady", "the lady", "Madame", "the occupant of Briony Lodge"], "type": "person", "wiki_url": "https://bakerstreet.fandom.com/wiki/Irene_Adler", "entity_id": "wiki:Irene_Adler"}
-{"canonical": "Godfrey Norton", "aliases": ["Godfrey Norton", "Mr. Godfrey Norton", "Norton", "gentleman", "husband", "her husband"], "type": "person", "wiki_url": "https://bakerstreet.fandom.com/wiki/Godfrey_Norton", "entity_id": "wiki:Godfrey_Norton"}
-{"canonical": "Watson's wife", "aliases": ["Watson's wife"], "type": "person", "wiki_url": "https://bakerstreet.fandom.com/wiki/Mary_Watson", "entity_id": "wiki:Mary_Watson"}
-{"canonical": "Mrs. Turner", "aliases": ["Mrs. Turner", "the landlady"], "type": "person", "wiki_url": null, "entity_id": "provisional:26"}
-{"canonical": "Mary Jane", "aliases": ["Mary Jane", "maid", "the maid", "servant"], "type": "person", "wiki_url": null, "entity_id": "provisional:27"}
+{"canonical": "Sherlock Holmes", "aliases": ["Holmes", "Sherlock Holmes", "Watson's friend (Holmes)", "injured man (Holmes)", "the clergyman", "clergyman", "the visitor", "gentleman visitor (medical professional)"], "type": "person", "wiki_url": "https://bakerstreet.fandom.com/wiki/Sherlock_Holmes", "entity_id": "wiki:Sherlock_Holmes"}
+{"canonical": "Dr. Watson", "aliases": ["Dr. Watson", "Dr. Watson (narrator)", "Watson", "Watson (narrator)"], "type": "person", "wiki_url": "https://bakerstreet.fandom.com/wiki/John_Watson", "entity_id": "wiki:John_Watson"}
+{"canonical": "Wilhelm Gottsreich Sigismond von Ormstein", "aliases": ["Wilhelm Gottsreich Sigismond von Ormstein", "King of Bohemia", "The King of Bohemia", "The King", "the King", "the King (narrator's interlocutor)", "Count Von Kramm", "German client", "august person who employs the Count", "your Majesty's business", "House of Ormstein", "the royal houses of Europe", "reigning family of Holland"], "type": "person", "wiki_url": "https://bakerstreet.fandom.com/wiki/Wilhelm_von_Ormstein", "entity_id": "wiki:Wilhelm_von_Ormstein"}
+{"canonical": "Irene Adler", "aliases": ["Irene Adler", "Mademoiselle Irene Adler", "Irene Norton née Adler", "Irene Norton née Adler (she)", "a married woman", "an unmarried woman", "another woman", "the princess", "the pair (Irene Adler and Godfrey Norton)", "New Jersey"], "type": "person", "wiki_url": "https://bakerstreet.fandom.com/wiki/Irene_Adler", "entity_id": "wiki:Irene_Adler"}
+{"canonical": "Godfrey Norton", "aliases": ["Godfrey Norton", "Mr. Godfrey Norton", "Mr. Norton", "Irene Adler's husband", "Irene's husband (Godfrey Norton)", "lawyer"], "type": "person", "wiki_url": "https://bakerstreet.fandom.com/wiki/Godfrey_Norton", "entity_id": "wiki:Godfrey_Norton"}
+{"canonical": "Mrs. Watson", "aliases": ["Mrs. Watson"], "type": "person", "wiki_url": "https://bakerstreet.fandom.com/wiki/Mary_Elizabeth_Watson", "entity_id": "wiki:Mary_Elizabeth_Watson"}
+{"canonical": "Mrs. Turner", "aliases": ["Mrs. Turner", "Watson's landlady"], "type": "person", "wiki_url": null, "entity_id": "provisional:57"}
+{"canonical": "John the coachman", "aliases": ["John (coachman)", "John the coachman", "the coachman"], "type": "person", "wiki_url": null, "entity_id": "provisional:58"}
+{"canonical": "Mary Jane", "aliases": ["Mary Jane", "the maid", "maid", "servant girl", "servant maids", "elderly woman (servant at Briony Lodge)"], "type": "person", "wiki_url": null, "entity_id": "provisional:59"}
+{"canonical": "Mr. John Hare", "aliases": ["Mr. John Hare"], "type": "person", "wiki_url": null, "entity_id": "provisional:60"}
 {"canonical": "Clotilde Lothman von Saxe-Meningen", "aliases": ["Clotilde Lothman von Saxe-Meningen"], "type": "person", "wiki_url": "https://bakerstreet.fandom.com/wiki/Clotilde_Lothman_von_Saxe-Meiningen", "entity_id": "wiki:Clotilde_Lothman_von_Saxe-Meiningen"}
-{"canonical": "Baker Street", "aliases": ["Baker Street"], "type": "place", "wiki_url": null, "entity_id": "provisional:28"}
-{"canonical": "Briony Lodge", "aliases": ["Briony Lodge", "the house", "the house of Miss Irene Adler"], "type": "place", "wiki_url": "https://bakerstreet.fandom.com/wiki/Briony_Lodge", "entity_id": "wiki:Briony_Lodge"}
-{"canonical": "Church of St. Monica", "aliases": ["Church of St. Monica"], "type": "place", "wiki_url": "https://bakerstreet.fandom.com/wiki/Church_of_St_Monica", "entity_id": "wiki:Church_of_St_Monica"}
-{"canonical": "Serpentine Avenue", "aliases": ["Serpentine Avenue"], "type": "place", "wiki_url": null, "entity_id": "provisional:29"}
-{"canonical": "Serpentine-mews", "aliases": ["Serpentine-mews"], "type": "place", "wiki_url": null, "entity_id": "provisional:30"}
-{"canonical": "St. John's Wood", "aliases": ["St. John's Wood"], "type": "place", "wiki_url": null, "entity_id": "provisional:31"}
-{"canonical": "Eglow, Eglonitz, Egria", "aliases": ["Eglow, Eglonitz, Egria"], "type": "place", "wiki_url": null, "entity_id": "provisional:32"}
-{"canonical": "Odessa", "aliases": ["Odessa"], "type": "place", "wiki_url": null, "entity_id": "provisional:33"}
-{"canonical": "Trincomalee", "aliases": ["Trincomalee"], "type": "place", "wiki_url": null, "entity_id": "provisional:34"}
-{"canonical": "the Inner Temple", "aliases": ["the Inner Temple"], "type": "place", "wiki_url": null, "entity_id": "provisional:35"}
-{"canonical": "drawing-room", "aliases": ["drawing-room"], "type": "place", "wiki_url": null, "entity_id": "provisional:36"}
-{"canonical": "chambers", "aliases": ["chambers"], "type": "place", "wiki_url": null, "entity_id": "provisional:37"}
-{"canonical": "steps", "aliases": ["steps"], "type": "place", "wiki_url": null, "entity_id": "provisional:38"}
-{"canonical": "House of Ormstein", "aliases": ["House of Ormstein"], "type": "organization", "wiki_url": null, "entity_id": "provisional:39"}
-{"canonical": "Gross & Hankey's", "aliases": ["Gross & Hankey's"], "type": "organization", "wiki_url": null, "entity_id": "provisional:40"}
-{"canonical": "Atkinson brothers", "aliases": ["Atkinson brothers"], "type": "organization", "wiki_url": null, "entity_id": "provisional:41"}
-{"canonical": "reigning family of Holland", "aliases": ["reigning family of Holland"], "type": "organization", "wiki_url": null, "entity_id": "provisional:42"}
-{"canonical": "medical profession", "aliases": ["medical profession"], "type": "organization", "wiki_url": null, "entity_id": "provisional:43"}
-{"canonical": "a cabinet photograph", "aliases": ["a cabinet photograph", "photograph", "the photograph"], "type": "object", "wiki_url": null, "entity_id": "provisional:1"}
-{"canonical": "letter", "aliases": ["letter", "note", "the note"], "type": "object", "wiki_url": null, "entity_id": "provisional:2"}
-{"canonical": "a sheet of Holmes's note-book", "aliases": ["a sheet of Holmes's note-book"], "type": "object", "wiki_url": null, "entity_id": "provisional:3"}
-{"canonical": "chamois leather bag", "aliases": ["chamois leather bag"], "type": "object", "wiki_url": null, "entity_id": "provisional:4"}
-{"canonical": "cocaine", "aliases": ["cocaine"], "type": "object", "wiki_url": null, "entity_id": "provisional:5"}
-{"canonical": "landau", "aliases": ["landau"], "type": "object", "wiki_url": null, "entity_id": "provisional:6"}
-{"canonical": "carriage", "aliases": ["carriage"], "type": "object", "wiki_url": null, "entity_id": "provisional:7"}
-{"canonical": "cab", "aliases": ["cab"], "type": "object", "wiki_url": null, "entity_id": "provisional:8"}
-{"canonical": "the royal brougham", "aliases": ["the royal brougham"], "type": "object", "wiki_url": null, "entity_id": "provisional:9"}
-{"canonical": "smoke-rocket", "aliases": ["smoke-rocket"], "type": "object", "wiki_url": null, "entity_id": "provisional:10"}
-{"canonical": "the jewel-box", "aliases": ["the jewel-box"], "type": "object", "wiki_url": null, "entity_id": "provisional:11"}
-{"canonical": "the ring", "aliases": ["the ring"], "type": "object", "wiki_url": null, "entity_id": "provisional:12"}
-{"canonical": "the couch", "aliases": ["the couch"], "type": "object", "wiki_url": null, "entity_id": "provisional:13"}
-{"canonical": "the gazetteer", "aliases": ["the gazetteer"], "type": "object", "wiki_url": null, "entity_id": "provisional:14"}
-{"canonical": "the letters", "aliases": ["the letters"], "type": "object", "wiki_url": null, "entity_id": "provisional:15"}
-{"canonical": "the note-paper", "aliases": ["the note-paper"], "type": "object", "wiki_url": null, "entity_id": "provisional:16"}
-{"canonical": "the seal", "aliases": ["the seal"], "type": "object", "wiki_url": null, "entity_id": "provisional:17"}
-{"canonical": "the writing", "aliases": ["the writing"], "type": "object", "wiki_url": null, "entity_id": "provisional:18"}
-{"canonical": "Study in Scarlet", "aliases": ["Study in Scarlet"], "type": "other", "wiki_url": null, "entity_id": "provisional:19"}
-{"canonical": "Trepoff murder", "aliases": ["Trepoff murder"], "type": "other", "wiki_url": null, "entity_id": "provisional:20"}
-{"canonical": "Wallenstein", "aliases": ["Wallenstein"], "type": "other", "wiki_url": null, "entity_id": "provisional:21"}
-{"canonical": "mystery", "aliases": ["mystery"], "type": "other", "wiki_url": null, "entity_id": "provisional:22"}
-{"canonical": "the thing", "aliases": ["the thing"], "type": "other", "wiki_url": null, "entity_id": "provisional:23"}
-{"canonical": "Hebrew rabbi", "aliases": ["Hebrew rabbi"], "type": "person", "wiki_url": null, "entity_id": "provisional:44"}
-{"canonical": "German", "aliases": ["German"], "type": "person", "wiki_url": "https://bakerstreet.fandom.com/wiki/Germany", "entity_id": "wiki:Germany"}
-{"canonical": "London slavey", "aliases": ["London slavey"], "type": "person", "wiki_url": null, "entity_id": "provisional:45"}
-{"canonical": "a groom", "aliases": ["a groom"], "type": "person", "wiki_url": null, "entity_id": "provisional:46"}
-{"canonical": "burglars", "aliases": ["burglars"], "type": "person", "wiki_url": null, "entity_id": "provisional:47"}
-{"canonical": "cabby", "aliases": ["cabby", "cabman"], "type": "person", "wiki_url": null, "entity_id": "provisional:48"}
-{"canonical": "clergyman", "aliases": ["clergyman", "the clergyman"], "type": "person", "wiki_url": null, "entity_id": "provisional:49"}
-{"canonical": "loafers", "aliases": ["loafers"], "type": "person", "wiki_url": null, "entity_id": "provisional:50"}
-{"canonical": "man", "aliases": ["man"], "type": "person", "wiki_url": null, "entity_id": "provisional:51"}
-{"canonical": "ostlers", "aliases": ["ostlers"], "type": "person", "wiki_url": null, "entity_id": "provisional:52"}
-{"canonical": "servant maids", "aliases": ["servant maids"], "type": "person", "wiki_url": null, "entity_id": "provisional:53"}
-{"canonical": "spectators", "aliases": ["spectators"], "type": "person", "wiki_url": null, "entity_id": "provisional:54"}
-{"canonical": "staff-commander", "aliases": ["staff-commander"], "type": "person", "wiki_url": null, "entity_id": "provisional:55"}
-{"canonical": "the coachman", "aliases": ["the coachman"], "type": "person", "wiki_url": null, "entity_id": "provisional:56"}
-{"canonical": "the crowd", "aliases": ["the crowd"], "type": "person", "wiki_url": null, "entity_id": "provisional:57"}
-{"canonical": "the elderly woman", "aliases": ["the elderly woman"], "type": "person", "wiki_url": null, "entity_id": "provisional:58"}
-{"canonical": "the injured man", "aliases": ["the injured man"], "type": "person", "wiki_url": null, "entity_id": "provisional:59"}
-{"canonical": "the man who wrote the note", "aliases": ["the man who wrote the note", "the writer of the note"], "type": "person", "wiki_url": null, "entity_id": "provisional:60"}
-{"canonical": "the pair", "aliases": ["the pair"], "type": "person", "wiki_url": null, "entity_id": "provisional:61"}
-{"canonical": "the paper maker", "aliases": ["the paper maker"], "type": "person", "wiki_url": null, "entity_id": "provisional:62"}
-{"canonical": "the young person", "aliases": ["the young person"], "type": "person", "wiki_url": null, "entity_id": "provisional:63"}
-{"canonical": "visitor", "aliases": ["visitor"], "type": "person", "wiki_url": null, "entity_id": "provisional:64"}
-{"canonical": "the baby", "aliases": ["the baby"], "type": "person", "wiki_url": null, "entity_id": "provisional:65"}
-{"canonical": "Gross & Hankey’s", "aliases": ["Gross & Hankey’s"], "type": "other", "wiki_url": null, "entity_id": "provisional:24"}
-{"canonical": "St. John’s Wood", "aliases": ["St. John’s Wood"], "type": "other", "wiki_url": null, "entity_id": "provisional:25"}
+{"canonical": "Grand Duke of Cassel-Felstein", "aliases": ["Grand Duke of Cassel-Felstein"], "type": "person", "wiki_url": null, "entity_id": "provisional:61"}
+{"canonical": "King of Scandinavia", "aliases": ["King of Scandinavia"], "type": "person", "wiki_url": null, "entity_id": "provisional:62"}
+{"canonical": "Baker Street", "aliases": ["Baker Street", "Holmes's chambers", "Holmes's rooms", "the chamber (Baker Street rooms)", "steps from hall to Holmes's room", "the seventeen steps"], "type": "place", "wiki_url": null, "entity_id": "provisional:63"}
+{"canonical": "St. John's Wood", "aliases": ["Briony Lodge", "Irene Adler's house", "the house", "St. John's Wood"], "type": "place", "wiki_url": "https://bakerstreet.fandom.com/wiki/Briony_Lodge", "entity_id": "wiki:Briony_Lodge"}
+{"canonical": "Serpentine Avenue", "aliases": ["Serpentine Avenue"], "type": "place", "wiki_url": null, "entity_id": "provisional:64"}
+{"canonical": "Serpentine Mews", "aliases": ["Serpentine Mews", "coach-house"], "type": "place", "wiki_url": null, "entity_id": "provisional:65"}
+{"canonical": "Church of St. Monica", "aliases": ["Church of St. Monica", "the church", "altar", "the altar"], "type": "place", "wiki_url": "https://bakerstreet.fandom.com/wiki/Church_of_St_Monica", "entity_id": "wiki:Church_of_St_Monica"}
+{"canonical": "Langham Hotel", "aliases": ["Langham Hotel"], "type": "place", "wiki_url": null, "entity_id": "provisional:66"}
+{"canonical": "Inner Temple", "aliases": ["Inner Temple", "the Temple"], "type": "place", "wiki_url": null, "entity_id": "provisional:67"}
+{"canonical": "Charing Cross", "aliases": ["Charing Cross"], "type": "place", "wiki_url": "https://bakerstreet.fandom.com/wiki/Charing_Cross_Station", "entity_id": "wiki:Charing_Cross_Station"}
+{"canonical": "Regent Street", "aliases": ["Regent Street"], "type": "place", "wiki_url": null, "entity_id": "provisional:68"}
+{"canonical": "Edgeware Road", "aliases": ["Edgeware Road"], "type": "place", "wiki_url": null, "entity_id": "provisional:69"}
+{"canonical": "London", "aliases": ["London"], "type": "place", "wiki_url": "https://bakerstreet.fandom.com/wiki/London", "entity_id": "wiki:London"}
+{"canonical": "England", "aliases": ["England"], "type": "place", "wiki_url": "https://bakerstreet.fandom.com/wiki/England", "entity_id": "wiki:England"}
+{"canonical": "Europe", "aliases": ["Europe", "the Continent"], "type": "place", "wiki_url": null, "entity_id": "provisional:70"}
+{"canonical": "Bohemia", "aliases": ["Bohemia", "Kingdom of Bohemia"], "type": "place", "wiki_url": "https://bakerstreet.fandom.com/wiki/Bohemia", "entity_id": "wiki:Bohemia"}
+{"canonical": "Prague", "aliases": ["Prague"], "type": "place", "wiki_url": "https://bakerstreet.fandom.com/wiki/Prague", "entity_id": "wiki:Prague"}
+{"canonical": "Egria", "aliases": ["Egria", "Eglonitz", "Eglow", "Wallenstein"], "type": "place", "wiki_url": "https://bakerstreet.fandom.com/wiki/Egria", "entity_id": "wiki:Egria"}
+{"canonical": "Carlsbad", "aliases": ["Carlsbad"], "type": "place", "wiki_url": null, "entity_id": "provisional:71"}
+{"canonical": "Odessa", "aliases": ["Odessa"], "type": "place", "wiki_url": null, "entity_id": "provisional:72"}
+{"canonical": "Warsaw", "aliases": ["Warsaw"], "type": "place", "wiki_url": "https://bakerstreet.fandom.com/wiki/Warsaw", "entity_id": "wiki:Warsaw"}
+{"canonical": "Trincomalee", "aliases": ["Trincomalee"], "type": "place", "wiki_url": null, "entity_id": "provisional:73"}
+{"canonical": "Holland", "aliases": ["Holland"], "type": "place", "wiki_url": null, "entity_id": "provisional:74"}
+{"canonical": "La Scala", "aliases": ["La Scala"], "type": "place", "wiki_url": null, "entity_id": "provisional:75"}
+{"canonical": "Imperial Opera of Warsaw", "aliases": ["Imperial Opera of Warsaw"], "type": "place", "wiki_url": null, "entity_id": "provisional:76"}
+{"canonical": "Gross & Hankey's", "aliases": ["Gross & Hankey's"], "type": "place", "wiki_url": null, "entity_id": "provisional:77"}
+{"canonical": "Irene Adler's photograph", "aliases": ["Irene Adler's photograph", "Irene's photograph", "The Photograph", "the photograph", "photograph"], "type": "object", "wiki_url": null, "entity_id": "provisional:1"}
+{"canonical": "Irene Adler's sitting-room", "aliases": ["Irene Adler's sitting-room", "the sitting-room", "sitting-room / principal room", "drawing-room"], "type": "place", "wiki_url": null, "entity_id": "provisional:78"}
+{"canonical": "Irene Adler's bedroom", "aliases": ["Irene Adler's bedroom", "the bedroom"], "type": "place", "wiki_url": null, "entity_id": "provisional:79"}
+{"canonical": "Irene Adler's carriage", "aliases": ["Irene Adler's carriage", "brougham", "brougham (carriage)"], "type": "object", "wiki_url": null, "entity_id": "provisional:2"}
+{"canonical": "Irene Adler's purse", "aliases": ["Irene Adler's purse"], "type": "object", "wiki_url": null, "entity_id": "provisional:3"}
+{"canonical": "Irene Adler's watch", "aliases": ["Irene Adler's watch"], "type": "object", "wiki_url": null, "entity_id": "provisional:4"}
+{"canonical": "Gesellschaft", "aliases": ["Gesellschaft"], "type": "organization", "wiki_url": null, "entity_id": "provisional:80"}
+{"canonical": "Holmes's index", "aliases": ["Holmes's index"], "type": "object", "wiki_url": null, "entity_id": "provisional:5"}
+{"canonical": "Holmes's note-book", "aliases": ["Holmes's note-book"], "type": "object", "wiki_url": null, "entity_id": "provisional:6"}
+{"canonical": "Holmes's cigarette", "aliases": ["Holmes's cigarette", "cigarette"], "type": "object", "wiki_url": null, "entity_id": "provisional:7"}
+{"canonical": "Continental Gazetteer", "aliases": ["Continental Gazetteer"], "type": "object", "wiki_url": null, "entity_id": "provisional:8"}
+{"canonical": "A Study in Scarlet", "aliases": ["A Study in Scarlet"], "type": "object", "wiki_url": null, "entity_id": "provisional:9"}
+{"canonical": "plumber's smoke-rocket", "aliases": ["plumber's smoke-rocket", "smoke-rocket", "the rocket", "smoke", "the smoke and shouting", "the alarm of fire", "the fire"], "type": "object", "wiki_url": null, "entity_id": "provisional:10"}
+{"canonical": "Watson's chamber", "aliases": ["Watson's chamber"], "type": "place", "wiki_url": null, "entity_id": "provisional:81"}
+{"canonical": "Watson's left shoe", "aliases": ["Watson's left shoe"], "type": "object", "wiki_url": null, "entity_id": "provisional:11"}
+{"canonical": "Chubb lock", "aliases": ["Chubb lock"], "type": "object", "wiki_url": null, "entity_id": "provisional:12"}
+{"canonical": "chamois leather bag", "aliases": ["chamois leather bag"], "type": "object", "wiki_url": null, "entity_id": "provisional:13"}
+{"canonical": "emerald snake ring", "aliases": ["emerald snake ring"], "type": "object", "wiki_url": null, "entity_id": "provisional:14"}
+{"canonical": "brooch with flaming beryl", "aliases": ["brooch with flaming beryl"], "type": "object", "wiki_url": null, "entity_id": "provisional:15"}
+{"canonical": "gold watch", "aliases": ["gold watch"], "type": "object", "wiki_url": null, "entity_id": "provisional:16"}
+{"canonical": "black vizard mask", "aliases": ["black vizard mask", "mask"], "type": "object", "wiki_url": null, "entity_id": "provisional:17"}
+{"canonical": "cigar case", "aliases": ["cigar case"], "type": "object", "wiki_url": null, "entity_id": "provisional:18"}
+{"canonical": "jewel-box", "aliases": ["jewel-box"], "type": "object", "wiki_url": null, "entity_id": "provisional:19"}
+{"canonical": "stethoscope", "aliases": ["stethoscope"], "type": "object", "wiki_url": null, "entity_id": "provisional:20"}
+{"canonical": "gasogene", "aliases": ["gasogene"], "type": "object", "wiki_url": null, "entity_id": "provisional:21"}
+{"canonical": "spirit case", "aliases": ["spirit case"], "type": "object", "wiki_url": null, "entity_id": "provisional:22"}
+{"canonical": "monograph upon the deep-sea fishes", "aliases": ["monograph upon the deep-sea fishes"], "type": "object", "wiki_url": null, "entity_id": "provisional:23"}
+{"canonical": "Bohemian paper", "aliases": ["Bohemian paper", "private note-paper", "the note paper", "the notepaper"], "type": "object", "wiki_url": null, "entity_id": "provisional:24"}
+{"canonical": "letter", "aliases": ["letter", "letters", "compromising letters", "the letter", "the note", "papers"], "type": "object", "wiki_url": null, "entity_id": "provisional:25"}
+{"canonical": "receipt", "aliases": ["receipt"], "type": "object", "wiki_url": null, "entity_id": "provisional:26"}
+{"canonical": "the license", "aliases": ["the license"], "type": "object", "wiki_url": null, "entity_id": "provisional:27"}
+{"canonical": "seal", "aliases": ["seal"], "type": "object", "wiki_url": null, "entity_id": "provisional:28"}
+{"canonical": "the key", "aliases": ["the key"], "type": "object", "wiki_url": null, "entity_id": "provisional:29"}
+{"canonical": "the sliding panel recess", "aliases": ["the sliding panel recess", "sliding shutter"], "type": "object", "wiki_url": null, "entity_id": "provisional:30"}
+{"canonical": "the sovereign", "aliases": ["the sovereign"], "type": "object", "wiki_url": null, "entity_id": "provisional:31"}
+{"canonical": "tray", "aliases": ["tray"], "type": "object", "wiki_url": null, "entity_id": "provisional:32"}
+{"canonical": "armchair", "aliases": ["armchair", "the chair"], "type": "object", "wiki_url": null, "entity_id": "provisional:33"}
+{"canonical": "sofa / couch", "aliases": ["sofa / couch", "the couch"], "type": "object", "wiki_url": null, "entity_id": "provisional:34"}
+{"canonical": "bell-pull", "aliases": ["bell-pull", "the right bell-pull"], "type": "object", "wiki_url": null, "entity_id": "provisional:35"}
+{"canonical": "landau", "aliases": ["landau", "the landau"], "type": "object", "wiki_url": null, "entity_id": "provisional:36"}
+{"canonical": "cab", "aliases": ["cab", "the hansom cab"], "type": "object", "wiki_url": null, "entity_id": "provisional:37"}
+{"canonical": "ulster", "aliases": ["ulster"], "type": "object", "wiki_url": null, "entity_id": "provisional:38"}
+{"canonical": "top-hat", "aliases": ["top-hat", "broad-brimmed hat"], "type": "object", "wiki_url": null, "entity_id": "provisional:39"}
+{"canonical": "deep blue cloak", "aliases": ["deep blue cloak"], "type": "object", "wiki_url": null, "entity_id": "provisional:40"}
+{"canonical": "double-breasted coat", "aliases": ["double-breasted coat"], "type": "object", "wiki_url": null, "entity_id": "provisional:41"}
+{"canonical": "male costume", "aliases": ["male costume", "walking clothes"], "type": "object", "wiki_url": null, "entity_id": "provisional:42"}
+{"canonical": "cap", "aliases": ["cap"], "type": "object", "wiki_url": null, "entity_id": "provisional:43"}
+{"canonical": "watch chain", "aliases": ["watch chain"], "type": "object", "wiki_url": null, "entity_id": "provisional:44"}
+{"canonical": "moist red paint", "aliases": ["moist red paint"], "type": "object", "wiki_url": null, "entity_id": "provisional:45"}
+{"canonical": "cold beef and beer", "aliases": ["cold beef and beer"], "type": "object", "wiki_url": null, "entity_id": "provisional:46"}
+{"canonical": "5:15 train", "aliases": ["5:15 train"], "type": "object", "wiki_url": null, "entity_id": "provisional:47"}
+{"canonical": "Darlington Substitution Scandal", "aliases": ["Darlington Substitution Scandal"], "type": "other", "wiki_url": null, "entity_id": "provisional:48"}
+{"canonical": "Arnsworth Castle business", "aliases": ["Arnsworth Castle business"], "type": "other", "wiki_url": null, "entity_id": "provisional:49"}
+{"canonical": "Trepoff murder", "aliases": ["Trepoff murder"], "type": "other", "wiki_url": null, "entity_id": "provisional:50"}
+{"canonical": "Atkinson brothers", "aliases": ["Atkinson brothers"], "type": "other", "wiki_url": null, "entity_id": "provisional:51"}
+{"canonical": "Hercules", "aliases": ["Hercules"], "type": "person", "wiki_url": null, "entity_id": "provisional:82"}
+{"canonical": "Hebrew rabbi", "aliases": ["Hebrew rabbi"], "type": "person", "wiki_url": null, "entity_id": "provisional:83"}
+{"canonical": "staff-commander", "aliases": ["staff-commander"], "type": "person", "wiki_url": null, "entity_id": "provisional:84"}
+{"canonical": "banker", "aliases": ["banker"], "type": "person", "wiki_url": null, "entity_id": "provisional:85"}
+{"canonical": "business man", "aliases": ["business man"], "type": "person", "wiki_url": null, "entity_id": "provisional:86"}
+{"canonical": "baby", "aliases": ["baby"], "type": "person", "wiki_url": null, "entity_id": "provisional:87"}
+{"canonical": "nurse-girl", "aliases": ["nurse-girl"], "type": "person", "wiki_url": null, "entity_id": "provisional:88"}
+{"canonical": "cab driver", "aliases": ["cab driver", "the cabman"], "type": "person", "wiki_url": null, "entity_id": "provisional:89"}
+{"canonical": "accomplices in the street", "aliases": ["accomplices in the street", "the gang", "shabbily dressed men", "loafing man at the corner", "second loafer", "the loungers", "burglars", "ostlers", "scissors-grinder", "the scissors-grinder", "well-dressed young men", "better dressed onlookers", "guardsmen", "the guardsmen", "the helpers (crowd)", "crowd of spectators", "gentlemen"], "type": "person", "wiki_url": null, "entity_id": "provisional:90"}
+{"canonical": "woman bystander", "aliases": ["woman bystander"], "type": "person", "wiki_url": null, "entity_id": "provisional:91"}
+{"canonical": "the avenue", "aliases": ["the avenue"], "type": "place", "wiki_url": null, "entity_id": "provisional:92"}
+{"canonical": "corner of the street", "aliases": ["corner of the street", "end of the street"], "type": "place", "wiki_url": null, "entity_id": "provisional:93"}
+{"canonical": "the park", "aliases": ["the park"], "type": "place", "wiki_url": null, "entity_id": "provisional:94"}
+{"canonical": "garden", "aliases": ["garden"], "type": "place", "wiki_url": null, "entity_id": "provisional:95"}
+{"canonical": "the hall", "aliases": ["the hall"], "type": "place", "wiki_url": null, "entity_id": "provisional:96"}
+{"canonical": "the door", "aliases": ["the door"], "type": "object", "wiki_url": null, "entity_id": "provisional:52"}
+{"canonical": "the table", "aliases": ["the table"], "type": "object", "wiki_url": null, "entity_id": "provisional:53"}
+{"canonical": "the window", "aliases": ["the window", "window", "sitting-room window", "long windows"], "type": "object", "wiki_url": null, "entity_id": "provisional:54"}
+{"canonical": "blinds", "aliases": ["blinds"], "type": "object", "wiki_url": null, "entity_id": "provisional:55"}
+{"canonical": "lamps", "aliases": ["lamps"], "type": "object", "wiki_url": null, "entity_id": "provisional:56"}
