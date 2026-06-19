@@ -138,8 +138,44 @@ $$
 Traits are realized as Python mixin classes inherited alongside the base predicate
 class. The unparameterized traits (`Symmetric`, `Transitive`, `Functional`,
 `InverseFunctional`) are plain marker classes. `Inverse` is a generic parameterized
-by the partner predicate type. `Rule` has no clean type-level expression and is
-documented in prose on the predicate class.
+by the partner predicate type.
+
+#### Rule(φ ⇒ ψ) — Datalog rules
+
+`Rule(φ ⇒ ψ)` is a **Datalog rule** — a Horn clause restricted to positive,
+function-symbol-free literals:
+
+- **φ (body)** — a conjunction of positive graph pattern conditions: variable
+  bindings over instances in $V$ that must all hold in the asserted graph
+- **ψ (head)** — a single derived predicate instance to assert when φ is satisfied
+
+Formally, a rule with variables $x_1, \ldots, x_n$ has the shape:
+
+$$
+p_1(x_{a_1}, x_{b_1}) \wedge \cdots \wedge p_k(x_{a_k}, x_{b_k})\ \Rightarrow\ p_0(x_{a_0}, x_{b_0})
+$$
+
+where each $p_i \in T_\text{pred}$ and each $x_j$ ranges over $V$. The Datalog
+restrictions — no function symbols, no negation, no existential variables in the
+head — keep inference decidable and the semantics clean: rule application is
+iterated to a **least fixed point** over the asserted graph. Every derived instance
+enters $V$ as a full member with its own id and provenance (R10 applies; the
+`extraction_method` is `inferred`).
+
+The named traits are special cases of Datalog rules that the schema can express
+without the full `Rule` form:
+
+| Trait | Equivalent rule |
+|---|---|
+| `Transitive` | $p(x, y) \wedge p(y, z) \Rightarrow p(x, z)$ |
+| `Symmetric` | $p(x, y) \Rightarrow p(y, x)$ |
+| `Inverse(p')` | $p(x, y) \Rightarrow p'(y, x)$ |
+
+`Rule` is the escape hatch for any inference pattern that does not fit those named
+forms — cross-predicate rules, multi-hop chains, or rules with more than two body
+literals. Unlike the named traits, `Rule` has no clean Python type-level expression;
+it is declared in prose on the predicate class and realized as a callable that the
+inference engine invokes during fixed-point computation.
 
 ### Truth status
 
