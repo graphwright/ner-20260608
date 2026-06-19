@@ -1,5 +1,5 @@
 [project]
-name = "ner-20260608"
+name = "ner_20260608"
 version = "0.1.0"
 description = "Experimental NER approach for creating graphs"
 authors = [
@@ -14,6 +14,14 @@ license = {text = "MIT"}
 requires = ["pdm-backend"]
 build-backend = "pdm.backend"
 
-
 [tool.pdm]
 distribution = true
+
+[tool.pdm.build]
+package-dir = "src"
+includes = [
+    "src/ner_20260608/**/*.py",
+    "src/ner_20260608/data/*.jsonl",
+    "src/graph.py",
+    "src/loader.py",
+]
