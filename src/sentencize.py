@@ -41,7 +41,7 @@ except ImportError:
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_VERSION = "2023-06-01"
 ANTHROPIC_MODEL_MAP = {
-    "sonnet-4.6": "claude-sonnet-4-20250514",
+    "sonnet-4.6": "claude-sonnet-4-6",
 }
 DEFAULT_MODEL = "qwen2.5:14b"
 DEFAULT_OLLAMA = "http://192.168.1.162:11434"

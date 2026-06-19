@@ -81,9 +81,9 @@ except ImportError:
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_VERSION = "2023-06-01"
 ANTHROPIC_MODEL_MAP = {
-    "sonnet-4.6": "claude-sonnet-4-20250514",
+    "sonnet-4.6": "claude-sonnet-4-6",
 }
-CLAUDE_MODEL = "claude-sonnet-4-20250514"
+CLAUDE_MODEL = "claude-sonnet-4-6"
 STORY_ID = "scandal_in_bohemia"
 WIKI_BASE = "https://bakerstreet.fandom.com/wiki/"
 MAX_RETRIES = 3

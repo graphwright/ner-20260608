@@ -58,7 +58,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
-CLAUDE_MODEL      = "claude-sonnet-4-20250514"
+CLAUDE_MODEL      = "claude-sonnet-4-6"
 WIKI_SEARCH_URL   = "https://bakerstreet.fandom.com/api.php"
 WIKI_RATE_LIMIT   = 0.4      # seconds between wiki API calls
 MAX_RETRIES       = 3
