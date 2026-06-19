@@ -29,4 +29,5 @@ includes = [
 [dependency-groups]
 dev = [
     "build>=1.5.0",
+    "pytest>=9.1.1",
 ]

@@ -26,6 +26,15 @@ indexed correctly.
 """
 
 
+_WIKI_PREFIX = "https://bakerstreet.fandom.com/wiki/"
+
+
+def _canonicalize_id(entity_id: str) -> str:
+    if entity_id.startswith(_WIKI_PREFIX):
+        return "wiki:" + entity_id[len(_WIKI_PREFIX):]
+    return entity_id
+
+
 def _is_entity(obj):
     return hasattr(obj, 'id') and not callable(obj)
 
@@ -71,9 +80,13 @@ class Graph:
             if _is_entity(v) and not isinstance(v, type)
         )
 
+    def get(self, entity_id: str):
+        """Return the instance for entity_id, normalizing wiki URLs to canonical form."""
+        return self.by_id.get(_canonicalize_id(entity_id))
+
     def edges_from(self, entity_id: str, pred_type=None, truth=None) -> list:
         """Outward edges from entity_id, optionally filtered by type and truth_status."""
-        edges = self.out_edges.get(entity_id, [])
+        edges = self.out_edges.get(_canonicalize_id(entity_id), [])
         if pred_type:
             edges = [e for e in edges if isinstance(e, pred_type)]
         if truth:
@@ -83,7 +96,7 @@ class Graph:
 
     def edges_to(self, entity_id: str, pred_type=None, truth=None) -> list:
         """Inward edges to entity_id, optionally filtered by type and truth_status."""
-        edges = self.in_edges.get(entity_id, [])
+        edges = self.in_edges.get(_canonicalize_id(entity_id), [])
         if pred_type:
             edges = [e for e in edges if isinstance(e, pred_type)]
         if truth:
@@ -144,7 +157,7 @@ class Graph:
 
     def describe(self, entity_id: str) -> str:
         """Human-readable description of an instance by id."""
-        inst = self.by_id.get(entity_id)
+        inst = self.get(entity_id)
         if inst is None:
             return f"<not found: {entity_id}>"
         if _is_statement(inst):
