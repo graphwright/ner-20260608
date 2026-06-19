@@ -92,7 +92,6 @@ ANTHROPIC_MODEL_MAP = {
 DEFAULT_OLLAMA = os.environ.get("OLLAMA_BASE", "http://192.168.1.162:11434")
 DEFAULT_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:14b")
 STORY_ID = "scandal_in_bohemia"
-WIKI_BASE = "https://bakerstreet.fandom.com/wiki/"
 MAX_RETRIES = 3
 DEFAULT_CHUNK_SIZE = 15
 DEFAULT_OVERLAP = 3
@@ -308,15 +307,8 @@ def load_sentences(path: Path) -> list[dict]:
     return rows
 
 
-def expand_id(raw_id: str) -> str:
-    """Expand wiki:Slug to full Baker Street Wiki URI."""
-    if raw_id.startswith("wiki:"):
-        return f"{WIKI_BASE}{raw_id[5:]}"
-    return raw_id
-
-
 def load_entities(path: Path) -> dict[str, dict]:
-    """Returns {expanded_entity_id: record}."""
+    """Returns {entity_id: record}."""
     index: dict[str, dict] = {}
     with path.open(encoding="utf-8") as fh:
         for line in fh:
@@ -324,12 +316,10 @@ def load_entities(path: Path) -> dict[str, dict]:
             if not line:
                 continue
             rec = json.loads(line)
-            raw_id = rec.get("entity_id", "")
-            if not raw_id:
+            entity_id = rec.get("entity_id", "")
+            if not entity_id:
                 continue
-            full_id = expand_id(raw_id)
-            rec["entity_id"] = full_id
-            index[full_id] = rec
+            index[entity_id] = rec
     return index
 
 
