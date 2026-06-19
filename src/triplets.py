@@ -84,18 +84,19 @@ try:
 except ImportError:
     pass
 
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
-
-DEFAULT_OLLAMA      = os.environ.get("OLLAMA_BASE", "http://192.168.1.162:11434")
-DEFAULT_MODEL       = os.environ.get("OLLAMA_MODEL", "qwen2.5:14b")
-STORY_ID            = "scandal_in_bohemia"
-WIKI_BASE           = "https://bakerstreet.fandom.com/wiki/"
-MAX_RETRIES         = 3
-DEFAULT_CHUNK_SIZE  = 15
-DEFAULT_OVERLAP     = 3
-DEFAULT_EVENT_WIN   = 15   # sentences either side of chunk to include events/moments
+ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
+ANTHROPIC_VERSION = "2023-06-01"
+ANTHROPIC_MODEL_MAP = {
+    "sonnet-4.6": "claude-sonnet-4-20250514",
+}
+DEFAULT_OLLAMA = os.environ.get("OLLAMA_BASE", "http://192.168.1.162:11434")
+DEFAULT_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:14b")
+STORY_ID = "scandal_in_bohemia"
+WIKI_BASE = "https://bakerstreet.fandom.com/wiki/"
+MAX_RETRIES = 3
+DEFAULT_CHUNK_SIZE = 15
+DEFAULT_OVERLAP = 3
+DEFAULT_EVENT_WIN = 15
 
 # ---------------------------------------------------------------------------
 # Predicate catalogue
@@ -222,9 +223,11 @@ Rules:
 - Do not output {{}}.
 """
 
-# ---------------------------------------------------------------------------
-# Ollama client
-# ---------------------------------------------------------------------------
+def resolve_model(model: str, anthropic: bool) -> str:
+    if anthropic:
+        return ANTHROPIC_MODEL_MAP.get(model, model)
+    return model
+
 
 def ollama_chat(system: str, user: str, model: str, base_url: str) -> str:
     url = f"{base_url.rstrip('/')}/api/chat"
@@ -242,9 +245,35 @@ def ollama_chat(system: str, user: str, model: str, base_url: str) -> str:
     return resp.json()["message"]["content"]
 
 
-# ---------------------------------------------------------------------------
-# JSON extraction
-# ---------------------------------------------------------------------------
+def anthropic_chat(system: str, user: str, model: str) -> str:
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        raise RuntimeError("ANTHROPIC_API_KEY not set")
+    payload = {
+        "model": resolve_model(model, anthropic=True),
+        "max_tokens": 4096,
+        "system": system,
+        "messages": [{"role": "user", "content": user}],
+    }
+    resp = httpx.post(
+        ANTHROPIC_API_URL,
+        json=payload,
+        headers={
+            "x-api-key": api_key,
+            "anthropic-version": ANTHROPIC_VERSION,
+            "content-type": "application/json",
+        },
+        timeout=httpx.Timeout(10.0, read=360.0),
+    )
+    resp.raise_for_status()
+    return resp.json()["content"][0]["text"]
+
+
+def chat(system: str, user: str, model: str, anthropic: bool, base_url: str | None) -> str:
+    if anthropic:
+        return anthropic_chat(system, user, model)
+    assert base_url is not None
+    return ollama_chat(system, user, model, base_url)
 
 def extract_json_objects(raw: str) -> list[dict]:
     decoder = json.JSONDecoder()
@@ -656,15 +685,16 @@ def mark_chunk_done(output_path: Path, cid: str, done: set[str]) -> None:
 # ---------------------------------------------------------------------------
 
 def process_chunk(
-    context:       list[dict],
-    chunk:         list[dict],
-    partitions:    dict[str, dict[str, str]],
-    alias_to_id:   dict[str, str],
+    context: list[dict],
+    chunk: list[dict],
+    partitions: dict[str, dict[str, str]],
+    alias_to_id: dict[str, str],
     alias_to_type: dict[str, str],
-    registry:      TripletRegistry,
-    model:         str,
-    base_url:      str,
-    debug:         bool = False,
+    registry: TripletRegistry,
+    model: str,
+    anthropic: bool,
+    base_url: str | None,
+    debug: bool = False,
 ) -> list[dict]:
 
     user = TRIPLET_USER_TMPL.format(
@@ -684,7 +714,7 @@ def process_chunk(
 
     for attempt in range(1, MAX_RETRIES + 1):
         try:
-            raw = ollama_chat(TRIPLET_SYSTEM, user, model, base_url)
+            raw = chat(TRIPLET_SYSTEM, user, model, anthropic, base_url)
             break
         except Exception as e:
             print(f"[error attempt {attempt}: {e}]", end=" ", flush=True)
@@ -708,20 +738,19 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Triplet extraction -> JSONL (local Ollama)"
     )
-    parser.add_argument("--sentences",    required=True)
-    parser.add_argument("--entities",     required=True)
-    parser.add_argument("--events",       required=True)
-    parser.add_argument("--moments",      required=True)
-    parser.add_argument("--output",       required=True)
-    parser.add_argument("--model",        default=DEFAULT_MODEL)
-    parser.add_argument("--ollama",       default=DEFAULT_OLLAMA)
-    parser.add_argument("--chunk-size",   type=int, default=DEFAULT_CHUNK_SIZE)
-    parser.add_argument("--overlap",      type=int, default=DEFAULT_OVERLAP)
-    parser.add_argument("--event-window", type=int, default=DEFAULT_EVENT_WIN,
-                        help="Sentence radius around chunk for event/moment filtering")
-    parser.add_argument("--dump-aliases", action="store_true",
-                        help="Print the full alias table and exit (useful for debugging)")
-    parser.add_argument("--debug",        action="store_true")
+    parser.add_argument("--sentences", required=True)
+    parser.add_argument("--entities", required=True)
+    parser.add_argument("--events", required=True)
+    parser.add_argument("--moments", required=True)
+    parser.add_argument("--output", required=True)
+    parser.add_argument("--model", default=DEFAULT_MODEL)
+    parser.add_argument("--ollama", default=DEFAULT_OLLAMA)
+    parser.add_argument("--anthropic", action="store_true")
+    parser.add_argument("--chunk-size", type=int, default=DEFAULT_CHUNK_SIZE)
+    parser.add_argument("--overlap", type=int, default=DEFAULT_OVERLAP)
+    parser.add_argument("--event-window", type=int, default=DEFAULT_EVENT_WIN, help="Sentence radius around chunk for event/moment filtering")
+    parser.add_argument("--dump-aliases", action="store_true", help="Print the full alias table and exit")
+    parser.add_argument("--debug", action="store_true")
     args = parser.parse_args()
 
     sentences_path = Path(args.sentences)
@@ -805,11 +834,16 @@ def main() -> None:
             )
 
             triplets = process_chunk(
-                context, chunk,
+                context,
+                chunk,
                 local_partitions,
-                alias_to_id, alias_to_type,
+                alias_to_id,
+                alias_to_type,
                 registry,
-                args.model, args.ollama, args.debug,
+                args.model,
+                args.anthropic,
+                None if args.anthropic else args.ollama,
+                args.debug,
             )
 
             for rec in triplets:

@@ -31,15 +31,23 @@ Resume: if output file exists, already-processed chunk_ids are skipped.
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
 import httpx
 
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
+ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
+ANTHROPIC_VERSION = "2023-06-01"
+ANTHROPIC_MODEL_MAP = {
+    "sonnet-4.6": "claude-sonnet-4-20250514",
+}
 DEFAULT_MODEL = "qwen2.5:14b"
 DEFAULT_OLLAMA = "http://192.168.1.162:11434"
 DEFAULT_CHUNK_SIZE = 20
@@ -78,9 +86,11 @@ Rules:
 - Do not output {{}}.
 """
 
-# ---------------------------------------------------------------------------
-# I/O helpers
-# ---------------------------------------------------------------------------
+def resolve_model(model: str, anthropic: bool) -> str:
+    if anthropic:
+        return ANTHROPIC_MODEL_MAP.get(model, model)
+    return model
+
 
 def load_sentences(path: Path) -> list[dict]:
     sentences = []
@@ -114,11 +124,7 @@ def read_done_chunks(path: Path) -> set[str]:
     return done
 
 
-# ---------------------------------------------------------------------------
-# Ollama chat client
-# ---------------------------------------------------------------------------
-
-def chat(system: str, user: str, model: str, base_url: str) -> str:
+def ollama_chat(system: str, user: str, model: str, base_url: str) -> str:
     url = f"{base_url.rstrip('/')}/api/chat"
     payload = {
         "model": model,
@@ -126,7 +132,7 @@ def chat(system: str, user: str, model: str, base_url: str) -> str:
         "options": {"temperature": 0.0},
         "messages": [
             {"role": "system", "content": system},
-            {"role": "user",   "content": user},
+            {"role": "user", "content": user},
         ],
     }
     resp = httpx.post(url, json=payload, timeout=180.0)
@@ -134,9 +140,35 @@ def chat(system: str, user: str, model: str, base_url: str) -> str:
     return resp.json()["message"]["content"]
 
 
-# ---------------------------------------------------------------------------
-# Response parsing
-# ---------------------------------------------------------------------------
+def anthropic_chat(system: str, user: str, model: str) -> str:
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        raise RuntimeError("ANTHROPIC_API_KEY not set")
+    payload = {
+        "model": resolve_model(model, anthropic=True),
+        "max_tokens": 4096,
+        "system": system,
+        "messages": [{"role": "user", "content": user}],
+    }
+    resp = httpx.post(
+        ANTHROPIC_API_URL,
+        json=payload,
+        headers={
+            "x-api-key": api_key,
+            "anthropic-version": ANTHROPIC_VERSION,
+            "content-type": "application/json",
+        },
+        timeout=180.0,
+    )
+    resp.raise_for_status()
+    return resp.json()["content"][0]["text"]
+
+
+def chat(system: str, user: str, model: str, anthropic: bool, base_url: str | None) -> str:
+    if anthropic:
+        return anthropic_chat(system, user, model)
+    assert base_url is not None
+    return ollama_chat(system, user, model, base_url)
 
 def extract_json_objects(raw: str) -> list[dict]:
     """
@@ -244,7 +276,8 @@ def process_chunk(
     context_sents: list[dict],
     chunk_sents: list[dict],
     model: str,
-    base_url: str,
+    anthropic: bool,
+    base_url: str | None,
     debug: bool = False,
 ) -> list[dict]:
     user = USER_TMPL.format(
@@ -254,7 +287,7 @@ def process_chunk(
     valid_ids = {s["id"] for s in chunk_sents}
 
     for attempt in range(1, MAX_RETRIES + 1):
-        raw = chat(SYSTEM, user, model, base_url)
+        raw = chat(SYSTEM, user, model, anthropic, base_url)
         if debug:
             print(f"\n  [debug] raw attempt {attempt}:\n{raw}\n", file=sys.stderr)
         objects = extract_json_objects(raw)
@@ -278,19 +311,18 @@ def process_chunk(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Coreference resolution → JSONL")
-    parser.add_argument("--input",      required=True)
-    parser.add_argument("--output",     required=True)
-    parser.add_argument("--model",      default=DEFAULT_MODEL)
-    parser.add_argument("--ollama",     default=DEFAULT_OLLAMA)
+    parser.add_argument("--input", required=True)
+    parser.add_argument("--output", required=True)
+    parser.add_argument("--model", default=DEFAULT_MODEL)
+    parser.add_argument("--ollama", default=DEFAULT_OLLAMA)
+    parser.add_argument("--anthropic", action="store_true")
     parser.add_argument("--chunk-size", type=int, default=DEFAULT_CHUNK_SIZE)
-    parser.add_argument("--overlap",    type=int, default=DEFAULT_OVERLAP)
-    parser.add_argument("--debug",      action="store_true",
-                        help="Print full raw LLM output for every chunk")
-    parser.add_argument("--only-chunk", type=int, default=None, metavar="N",
-                        help="Process only chunk N (1-based); useful for spot inspection")
+    parser.add_argument("--overlap", type=int, default=DEFAULT_OVERLAP)
+    parser.add_argument("--debug", action="store_true", help="Print full raw LLM output for every chunk")
+    parser.add_argument("--only-chunk", type=int, default=None, metavar="N", help="Process only chunk N (1-based); useful for spot inspection")
     args = parser.parse_args()
 
-    input_path  = Path(args.input)
+    input_path = Path(args.input)
     output_path = Path(args.output)
 
     sentences = load_sentences(input_path)
@@ -319,8 +351,14 @@ def main() -> None:
                 end=" ", flush=True,
             )
 
-            entities = process_chunk(context, chunk, args.model, args.ollama,
-                                     debug=args.debug)
+            entities = process_chunk(
+                context,
+                chunk,
+                args.model,
+                args.anthropic,
+                None if args.anthropic else args.ollama,
+                debug=args.debug,
+            )
 
             record = {
                 "chunk_id": cid,

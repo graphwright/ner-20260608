@@ -79,12 +79,16 @@ except ImportError:
 # ---------------------------------------------------------------------------
 
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
-CLAUDE_MODEL      = "claude-sonnet-4-20250514"
-STORY_ID          = "scandal_in_bohemia"
-WIKI_BASE         = "https://bakerstreet.fandom.com/wiki/"
-MAX_RETRIES       = 3
-DEFAULT_CHUNK     = 30
-DEFAULT_OVERLAP   = 5
+ANTHROPIC_VERSION = "2023-06-01"
+ANTHROPIC_MODEL_MAP = {
+    "sonnet-4.6": "claude-sonnet-4-20250514",
+}
+CLAUDE_MODEL = "claude-sonnet-4-20250514"
+STORY_ID = "scandal_in_bohemia"
+WIKI_BASE = "https://bakerstreet.fandom.com/wiki/"
+MAX_RETRIES = 3
+DEFAULT_CHUNK = 30
+DEFAULT_OVERLAP = 5
 
 # ---------------------------------------------------------------------------
 # Prompts
@@ -163,16 +167,16 @@ Rules:
 - Do not output {{}}.
 """
 
-# ---------------------------------------------------------------------------
-# Claude API client
-# ---------------------------------------------------------------------------
+def resolve_model(model: str) -> str:
+    return ANTHROPIC_MODEL_MAP.get(model, model)
 
-def claude(system: str, user: str, max_tokens: int = 4096) -> str:
+
+def claude(system: str, user: str, model: str, max_tokens: int = 4096) -> str:
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
     if not api_key:
         raise RuntimeError("ANTHROPIC_API_KEY not set")
     payload = {
-        "model": CLAUDE_MODEL,
+        "model": resolve_model(model),
         "max_tokens": max_tokens,
         "system": system,
         "messages": [{"role": "user", "content": user}],
@@ -182,7 +186,7 @@ def claude(system: str, user: str, max_tokens: int = 4096) -> str:
         json=payload,
         headers={
             "x-api-key": api_key,
-            "anthropic-version": "2023-06-01",
+            "anthropic-version": ANTHROPIC_VERSION,
             "content-type": "application/json",
         },
         timeout=120.0,
@@ -457,26 +461,17 @@ def mark_chunk_done(events_path: Path, chunk_id_str: str, done: set[str]) -> Non
 # Main processing
 # ---------------------------------------------------------------------------
 
-def process_chunk(
-    context:      list[dict],
-    chunk:        list[dict],
-    entity_index: dict[str, str],
-    known_event_ids: set[str],
-) -> tuple[list[dict], list[dict]]:
-    """Returns (events, moments) extracted from this chunk."""
-
+def process_chunk(context: list[dict], chunk: list[dict], entity_index: dict[str, str], known_event_ids: set[str], model: str) -> tuple[list[dict], list[dict]]:
     user = EVENT_USER_TMPL.format(
         context_block=format_block(context),
         chunk_block=format_block(chunk),
         entity_index=format_entity_index(entity_index),
     )
-
     valid_ids = {s["id"] for s in chunk}
     raw = ""
-
     for attempt in range(1, MAX_RETRIES + 1):
         try:
-            raw = claude(EVENT_SYSTEM, user, max_tokens=4096)
+            raw = claude(EVENT_SYSTEM, user, model=model, max_tokens=4096)
             break
         except Exception as e:
             print(f"[error attempt {attempt}: {e}]", end=" ", flush=True)
@@ -510,22 +505,21 @@ def process_chunk(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Extract events and moments from sentencized Holmes story (Claude API)"
-    )
-    parser.add_argument("--sentences",   required=True)
-    parser.add_argument("--entities",    required=True)
-    parser.add_argument("--events",      required=True)
-    parser.add_argument("--moments",     required=True)
-    parser.add_argument("--chunk-size",  type=int, default=DEFAULT_CHUNK)
-    parser.add_argument("--overlap",     type=int, default=DEFAULT_OVERLAP)
-    parser.add_argument("--debug",       action="store_true")
+    parser = argparse.ArgumentParser(description="Extract events and moments from sentencized Holmes story (Claude API)")
+    parser.add_argument("--sentences", required=True)
+    parser.add_argument("--entities", required=True)
+    parser.add_argument("--events", required=True)
+    parser.add_argument("--moments", required=True)
+    parser.add_argument("--model", default=CLAUDE_MODEL)
+    parser.add_argument("--chunk-size", type=int, default=DEFAULT_CHUNK)
+    parser.add_argument("--overlap", type=int, default=DEFAULT_OVERLAP)
+    parser.add_argument("--debug", action="store_true")
     args = parser.parse_args()
 
     sentences_path = Path(args.sentences)
-    entities_path  = Path(args.entities)
-    events_path    = Path(args.events)
-    moments_path   = Path(args.moments)
+    entities_path = Path(args.entities)
+    events_path = Path(args.events)
+    moments_path = Path(args.moments)
 
     sentences    = load_sentences(sentences_path)
     entity_index = load_entities(entities_path)
@@ -581,9 +575,7 @@ def main() -> None:
                 end=" ", flush=True,
             )
 
-            events, moments = process_chunk(
-                context, chunk, entity_index, known_event_ids
-            )
+            events, moments = process_chunk(context, chunk, entity_index, known_event_ids, args.model)
 
             if args.debug and not events and not moments:
                 print(f"\n  [debug] no records extracted from chunk {cid}",

@@ -14,13 +14,27 @@ TRIPLETS := bohemia_triplets.jsonl
 EVENTS_PROGRESS := .bohemia_events_progress.json
 TRIPLETS_PROGRESS := .bohemia_triplets_progress.json
 
-SENT_MODEL ?= qwen2.5:14b
-COREF_MODEL ?= qwen2.5:14b
-TRIPLETS_MODEL ?= qwen2.5:14b
+SENT_MODEL ?= sonnet-4.6
+COREF_MODEL ?= sonnet-4.6
+EVENTS_MODEL ?= sonnet-4.6
+TRIPLETS_MODEL ?= sonnet-4.6
 
 OLLAMA ?= http://192.168.1.162:11434
 EVENTS_OLLAMA ?= $(OLLAMA)
 TRIPLETS_OLLAMA ?= $(OLLAMA)
+ANTHROPIC ?= 0
+
+ifeq ($(ANTHROPIC),1)
+SENT_LLM_FLAGS := --model $(SENT_MODEL) --anthropic
+COREF_LLM_FLAGS := --model $(COREF_MODEL) --anthropic
+EVENTS_LLM_FLAGS := --model $(EVENTS_MODEL)
+TRIPLETS_LLM_FLAGS := --model $(TRIPLETS_MODEL) --anthropic
+else
+SENT_LLM_FLAGS := --model $(SENT_MODEL) --ollama $(OLLAMA)
+COREF_LLM_FLAGS := --model $(COREF_MODEL) --ollama $(OLLAMA)
+EVENTS_LLM_FLAGS := --model $(EVENTS_MODEL)
+TRIPLETS_LLM_FLAGS := --model $(TRIPLETS_MODEL) --ollama $(TRIPLETS_OLLAMA)
+endif
 
 SENT_GUTENBERG ?= 0
 COREF_CHUNK_SIZE ?= 20
@@ -57,16 +71,17 @@ help:
 	@echo "  make coref COREF_CHUNK_SIZE=25 COREF_OVERLAP=5"
 	@echo "  make triplets TRIPLETS_EVENT_WINDOW=10 TRIPLETS_CHUNK_SIZE=12"
 	@echo "  make all OLLAMA=http://host:11434"
+	@echo "  ANTHROPIC=1 make all"
 
 sentences: $(SENTENCES)
 
 $(SENTENCES): $(TEXT) src/sentencize.py
-	$(PYTHON) src/sentencize.py --input $(TEXT) --output $(SENTENCES) --model $(SENT_MODEL) --ollama $(OLLAMA) $(SENT_GUTENBERG_FLAG)
+	$(PYTHON) src/sentencize.py --input $(TEXT) --output $(SENTENCES) $(SENT_LLM_FLAGS) $(SENT_GUTENBERG_FLAG)
 
 coref: $(COREF)
 
 $(COREF): $(SENTENCES) src/coref.py
-	$(PYTHON) src/coref.py --input $(SENTENCES) --output $(COREF) --model $(COREF_MODEL) --ollama $(OLLAMA) --chunk-size $(COREF_CHUNK_SIZE) --overlap $(COREF_OVERLAP)
+	$(PYTHON) src/coref.py --input $(SENTENCES) --output $(COREF) $(COREF_LLM_FLAGS) --chunk-size $(COREF_CHUNK_SIZE) --overlap $(COREF_OVERLAP)
 
 merge: $(ENTITIES) $(MENTIONS)
 
@@ -76,12 +91,12 @@ $(ENTITIES) $(MENTIONS): $(COREF) src/merge.py
 events: $(EVENTS) $(MOMENTS)
 
 $(EVENTS) $(MOMENTS): $(SENTENCES) $(ENTITIES) src/events.py
-	$(PYTHON) src/events.py --sentences $(SENTENCES) --entities $(ENTITIES) --events $(EVENTS) --moments $(MOMENTS) --ollama $(EVENTS_OLLAMA)
+	$(PYTHON) src/events.py --sentences $(SENTENCES) --entities $(ENTITIES) --events $(EVENTS) --moments $(MOMENTS) $(EVENTS_LLM_FLAGS)
 
 triplets: $(TRIPLETS)
 
 $(TRIPLETS): $(SENTENCES) $(ENTITIES) $(EVENTS) $(MOMENTS) src/triplets.py
-	$(PYTHON) src/triplets.py --sentences $(SENTENCES) --entities $(ENTITIES) --events $(EVENTS) --moments $(MOMENTS) --output $(TRIPLETS) --model $(TRIPLETS_MODEL) --ollama $(TRIPLETS_OLLAMA) --chunk-size $(TRIPLETS_CHUNK_SIZE) --overlap $(TRIPLETS_OVERLAP) --event-window $(TRIPLETS_EVENT_WINDOW)
+	$(PYTHON) src/triplets.py --sentences $(SENTENCES) --entities $(ENTITIES) --events $(EVENTS) --moments $(MOMENTS) --output $(TRIPLETS) $(TRIPLETS_LLM_FLAGS) --chunk-size $(TRIPLETS_CHUNK_SIZE) --overlap $(TRIPLETS_OVERLAP) --event-window $(TRIPLETS_EVENT_WINDOW)
 
 fresh-events: clean-events events
 

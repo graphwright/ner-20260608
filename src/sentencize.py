@@ -4,13 +4,16 @@ sentencize.py
 Split a plain-text story into numbered sentences using an LLM, emitting JSONL.
 Each output record: {"id": <int>, "para": <int>, "text": "<sentence>"}
 
-Processes one paragraph per LLM call via the Ollama /api/chat endpoint.
-No JSON mode — the model returns raw JSONL lines which we parse directly.
+Supports either:
+- Ollama via /api/chat
+- Anthropic Messages API via --anthropic
 
 Usage:
     python sentencize.py --input bohemia.txt --output bohemia_sentences.jsonl
-    python sentencize.py --input bohemia.txt --output bohemia_sentences.jsonl \\
+    python sentencize.py --input bohemia.txt --output bohemia_sentences.jsonl \
         --model qwen2.5:14b --ollama http://192.168.1.162:11434
+    python sentencize.py --input bohemia.txt --output bohemia_sentences.jsonl \
+        --model sonnet-4.6 --anthropic
 
 Resume: if output already exists, reads highest sentence id and para and
 continues from the next unprocessed paragraph.
@@ -18,16 +21,28 @@ continues from the next unprocessed paragraph.
 
 import argparse
 import json
+import os
 import re
 import sys
 from pathlib import Path
 
 import httpx
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
+ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
+ANTHROPIC_VERSION = "2023-06-01"
+ANTHROPIC_MODEL_MAP = {
+    "sonnet-4.6": "claude-sonnet-4-20250514",
+}
 DEFAULT_MODEL = "qwen2.5:14b"
 DEFAULT_OLLAMA = "http://192.168.1.162:11434"
 MAX_RETRIES = 3
@@ -45,6 +60,59 @@ USER_TMPL = (
     'id starts at {id_offset}, para is {para_num}.\n\n'
     '{paragraph}'
 )
+
+def resolve_model(model: str, anthropic: bool) -> str:
+    if anthropic:
+        return ANTHROPIC_MODEL_MAP.get(model, model)
+    return model
+
+
+def ollama_chat(system: str, user: str, model: str, base_url: str) -> str:
+    url = f"{base_url.rstrip('/')}/api/chat"
+    payload = {
+        "model": model,
+        "stream": False,
+        "options": {"temperature": 0.0},
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+    }
+    resp = httpx.post(url, json=payload, timeout=120.0)
+    resp.raise_for_status()
+    return resp.json()["message"]["content"]
+
+
+def anthropic_chat(system: str, user: str, model: str) -> str:
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        raise RuntimeError("ANTHROPIC_API_KEY not set")
+    payload = {
+        "model": resolve_model(model, anthropic=True),
+        "max_tokens": 4096,
+        "system": system,
+        "messages": [{"role": "user", "content": user}],
+    }
+    resp = httpx.post(
+        ANTHROPIC_API_URL,
+        json=payload,
+        headers={
+            "x-api-key": api_key,
+            "anthropic-version": ANTHROPIC_VERSION,
+            "content-type": "application/json",
+        },
+        timeout=120.0,
+    )
+    resp.raise_for_status()
+    return resp.json()["content"][0]["text"]
+
+
+def chat(system: str, user: str, model: str, anthropic: bool, base_url: str | None) -> str:
+    if anthropic:
+        return anthropic_chat(system, user, model)
+    assert base_url is not None
+    return ollama_chat(system, user, model, base_url)
+
 
 # ---------------------------------------------------------------------------
 # Gutenberg stripping / paragraph extraction
@@ -78,26 +146,6 @@ def extract_paragraphs(text: str) -> list[str]:
             continue
         paras.append(p)
     return paras
-
-
-# ---------------------------------------------------------------------------
-# Ollama chat client
-# ---------------------------------------------------------------------------
-
-def chat(system: str, user: str, model: str, base_url: str) -> str:
-    url = f"{base_url.rstrip('/')}/api/chat"
-    payload = {
-        "model": model,
-        "stream": False,
-        "options": {"temperature": 0.0},
-        "messages": [
-            {"role": "system", "content": system},
-            {"role": "user",   "content": user},
-        ],
-    }
-    resp = httpx.post(url, json=payload, timeout=120.0)
-    resp.raise_for_status()
-    return resp.json()["message"]["content"]
 
 
 # ---------------------------------------------------------------------------
@@ -185,7 +233,8 @@ def process_paragraph(
     para_num: int,
     id_offset: int,
     model: str,
-    base_url: str,
+    anthropic: bool,
+    base_url: str | None,
 ) -> list[dict]:
     user = USER_TMPL.format(
         id_offset=id_offset,
@@ -193,10 +242,9 @@ def process_paragraph(
         paragraph=paragraph,
     )
     for attempt in range(1, MAX_RETRIES + 1):
-        raw = chat(SYSTEM, user, model, base_url)
+        raw = chat(SYSTEM, user, model, anthropic, base_url)
         records = parse_response(raw, para_num)
         if records:
-            # Re-sequence ids from id_offset in case model drifted
             for i, rec in enumerate(records):
                 rec["id"] = id_offset + i
             return records
@@ -213,15 +261,15 @@ def process_paragraph(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="LLM sentence splitter → JSONL")
-    parser.add_argument("--input",     required=True)
-    parser.add_argument("--output",    required=True)
-    parser.add_argument("--model",     default=DEFAULT_MODEL)
-    parser.add_argument("--ollama",    default=DEFAULT_OLLAMA)
-    parser.add_argument("--gutenberg", action="store_true",
-                        help="Strip Project Gutenberg header/footer")
+    parser.add_argument("--input", required=True)
+    parser.add_argument("--output", required=True)
+    parser.add_argument("--model", default=DEFAULT_MODEL)
+    parser.add_argument("--ollama", default=DEFAULT_OLLAMA)
+    parser.add_argument("--anthropic", action="store_true")
+    parser.add_argument("--gutenberg", action="store_true", help="Strip Project Gutenberg header/footer")
     args = parser.parse_args()
 
-    input_path  = Path(args.input)
+    input_path = Path(args.input)
     output_path = Path(args.output)
 
     raw_text = input_path.read_text(encoding="utf-8")
@@ -247,7 +295,8 @@ def main() -> None:
                 para_num=i,
                 id_offset=id_cursor + 1,
                 model=args.model,
-                base_url=args.ollama,
+                anthropic=args.anthropic,
+                base_url=None if args.anthropic else args.ollama,
             )
 
             for rec in records:
