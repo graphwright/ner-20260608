@@ -25,3 +25,8 @@ includes = [
     "src/graph.py",
     "src/loader.py",
 ]
+
+[dependency-groups]
+dev = [
+    "build>=1.5.0",
+]
