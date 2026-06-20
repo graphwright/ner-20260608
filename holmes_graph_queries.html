@@ -1,5 +1,57 @@
-<h2 class="sr-only">Interactive walkthrough of querying the in-memory Holmes graph: lookup, BFS, transitive closure, truth-status filtering, higher-order predicates, and temporal cutoff queries</h2>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Querying the Holmes graph — ner_20260608</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
 <style>
+:root {
+  --color-background-primary: #ffffff;
+  --color-background-secondary: #f5f4f0;
+  --color-background-info: #e6f1fb;
+  --color-background-warning: #faeeda;
+  --color-background-success: #eaf3de;
+  --color-text-primary: #2c2c2a;
+  --color-text-secondary: #5f5e5a;
+  --color-text-tertiary: #888780;
+  --color-text-info: #185fa5;
+  --color-text-warning: #854f0b;
+  --color-text-success: #3b6d11;
+  --color-border-tertiary: rgba(44,44,42,0.15);
+  --color-border-secondary: rgba(44,44,42,0.3);
+  --color-border-info: #b5d4f4;
+  --color-border-warning: #fac775;
+  --color-border-success: #c0dd97;
+  --border-radius-md: 8px;
+  --border-radius-lg: 12px;
+  --font-sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'SFMono-Regular', 'Courier New', monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-background-primary: #1e1e1c;
+    --color-background-secondary: #2a2a28;
+    --color-background-info: #042c53;
+    --color-background-warning: #412402;
+    --color-background-success: #173404;
+    --color-text-primary: #e8e6de;
+    --color-text-secondary: #9c9a92;
+    --color-text-tertiary: #6e6d67;
+    --color-text-info: #85b7eb;
+    --color-text-warning: #fac775;
+    --color-text-success: #c0dd97;
+    --color-border-tertiary: rgba(232,230,222,0.1);
+    --color-border-secondary: rgba(232,230,222,0.2);
+    --color-border-info: #0c447c;
+    --color-border-warning: #854f0b;
+    --color-border-success: #3b6d11;
+  }
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans);background:var(--color-background-primary);color:var(--color-text-primary);padding:2rem;max-width:780px;margin:0 auto;line-height:1.5}
+h1{font-size:20px;font-weight:500;margin-bottom:6px}
+.subtitle{font-size:14px;color:var(--color-text-secondary);margin-bottom:24px}
 .ps{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:13px 15px;width:100%}
 .ph{display:flex;align-items:center;gap:9px;cursor:pointer;user-select:none}
 .ph:hover .pname{color:var(--color-text-info)}
@@ -20,7 +72,7 @@
 .part{margin-top:10px;border-top:0.5px solid var(--color-border-tertiary);padding-top:10px}
 .part summary{font-size:12px;font-weight:500;color:var(--color-text-info);cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:6px}
 .part summary::-webkit-details-marker{display:none}
-.part summary::before{content:'\25B6';font-size:9px;transition:transform .15s;display:inline-block}
+.part summary::before{content:'▶';font-size:9px;transition:transform .15s;display:inline-block}
 .part[open] summary::before{transform:rotate(90deg)}
 .part pre{margin-top:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:12px;overflow-x:auto;font-family:var(--font-mono);font-size:11px;line-height:1.5;color:var(--color-text-primary);white-space:pre}
 .part pre code{background:none;border:none;padding:0;font-size:inherit}
@@ -29,6 +81,10 @@
 .legend-label{font-size:12px;color:var(--color-text-secondary);font-weight:500;margin-right:2px}
 .hint{font-size:11px;color:var(--color-text-tertiary);margin-left:6px}
 </style>
+</head>
+<body>
+<h1>Querying the Holmes graph</h1>
+<p class="subtitle">ner_20260608 — the in-memory graph layer over the hydrated typed instances. Click a query header for advice; expand for the real code.</p>
 
 <div class="legend">
 <span class="legend-label">Query type</span>
@@ -36,7 +92,7 @@
 <span class="pbadge" style="background:var(--color-background-info);border:0.5px solid var(--color-border-info);color:var(--color-text-info)">Traversal</span>
 <span class="pbadge" style="background:var(--color-background-warning);border:0.5px solid var(--color-border-warning);color:var(--color-text-warning)">Epistemic</span>
 <span class="pbadge" style="background:var(--color-background-success);border:0.5px solid var(--color-border-success);color:var(--color-text-success)">Temporal</span>
-<span class="hint"><i class="ti ti-hand-click" aria-hidden="true"></i> Click header for advice &nbsp;&middot;&nbsp; <i class="ti ti-code" aria-hidden="true"></i> Expand for code</span>
+<span class="hint"><i class="ti ti-hand-click"></i> Click header for advice &nbsp;&middot;&nbsp; <i class="ti ti-code"></i> Expand for code</span>
 </div>
 
 <div id="pl"></div>
@@ -62,7 +118,7 @@ const stages=[
 
 {type:'idx',icon:'ti-database',name:'Loading and lookup',
  desc:'load_bohemia_graph() hydrates the bundled JSONL into by_id, out_edges, in_edges — three dict indexes giving O(1) neighbor lookup.',
- advice:`<p>Both the wiki: slug form and the full Baker Street Wiki URL work as lookup keys — _canonicalize_id normalises full URLs internally, so callers never need to know which form a given id arrived in.</p><p>str() and repr() split responsibilities: str() returns the human-readable label (display_name, description, or a Statement\\'s subject -> object form); repr() always shows the canonical id. Neither is ever parsed back for type.</p>`,
+ advice:`<p>Both the wiki: slug form and the full Baker Street Wiki URL work as lookup keys — _canonicalize_id normalises full URLs internally, so callers never need to know which form a given id arrived in.</p><p>str() and repr() split responsibilities: str() returns the human-readable label (display_name, description, or a Statement's subject -> object form); repr() always shows the canonical id. Neither is ever parsed back for type.</p>`,
  artLabel:'graph.py — get and describe',
  artifact:
 `g = load_bohemia_graph()              # ~100ms, loads bundled wheel data
@@ -73,7 +129,7 @@ print(repr(holmes))                   # Person('wiki:Sherlock_Holmes')`
 
 {type:'trav',icon:'ti-arrows-exchange',name:'edges_from / edges_to',
  desc:'Outward and inward edges from an entity, optionally filtered by predicate type and truth_status. truth accepts a string, an enum, or a set of either.',
- advice:`<p>Holmes canon has asserted facts, disputed claims, and pure hypotheses — the truth filter is what lets a query stay inside just one of those layers, or deliberately span more than one.</p><p>No truth= argument returns every status at once, useful for an audit pass that needs to see everything regardless of the graph\\'s current epistemic commitment.</p>`,
+ advice:`<p>Holmes canon has asserted facts, disputed claims, and pure hypotheses — the truth filter is what lets a query stay inside just one of those layers, or deliberately span more than one.</p><p>No truth= argument returns every status at once, useful for an audit pass that needs to see everything regardless of the graph's current epistemic commitment.</p>`,
  artLabel:'graph.py — edges_from',
  artifact:
 `edges = g.edges_from("wiki:Irene_Adler",
@@ -95,8 +151,8 @@ for e in edges:
 },
 
 {type:'trav',icon:'ti-arrows-vertical',name:'Transitive closure',
- desc:'transitive_closure(entity_id, pred_type) follows one Transitive-trait predicate recursively through the asserted graph.',
- advice:`<p>LocatedIn is declared Transitive in the schema — Briony Lodge to St. John\\'s Wood to London resolves in one call without manually chaining edges_from lookups.</p><p>The LLM-extracted JSONL graph has sparse LocatedIn coverage; the manually-curated scandal_instances.py module has the full geographic chain and is the right fixture for this query.</p>`,
+ desc:"transitive_closure(entity_id, pred_type) follows one Transitive-trait predicate recursively through the asserted graph.",
+ advice:`<p>LocatedIn is declared Transitive in the schema — Briony Lodge to St. John's Wood to London resolves in one call without manually chaining edges_from lookups.</p><p>The LLM-extracted JSONL graph has sparse LocatedIn coverage; the manually-curated scandal_instances.py module has the full geographic chain and is the right fixture for this query.</p>`,
  artLabel:'graph.py — transitive_closure',
  artifact:
 `reachable = g.transitive_closure(
@@ -107,8 +163,8 @@ for e in edges:
 },
 
 {type:'epis',icon:'ti-eye-check',name:'KnewAt and Contradicts',
- desc:'Higher-order predicates whose object_ (or both subject and object_) is itself a BaseStatement. No Statement entity type exists — the target predicate instance is referenced directly, since E subset of V.',
- advice:`<p>"Watson knew the King was disguised at this moment" points KnewAt.object_ straight at the existing DisguisedAs instance — no wrapper node, no reification overhead.</p><p>Two distinct truth_status values are in play on a KnewAt: its own status answers "did Watson really learn this", while the object_\\'s own status answers "is the proposition itself true" — the schema keeps these independent on purpose.</p>`,
+ desc:'Higher-order predicates whose object_ (or both subject and object_) is itself a BaseStatement. No Statement entity type exists — the target predicate instance is referenced directly, since E is a subset of V.',
+ advice:`<p>"Watson knew the King was disguised at this moment" points KnewAt.object_ straight at the existing DisguisedAs instance — no wrapper node, no reification overhead.</p><p>Two distinct truth_status values are in play on a KnewAt: its own status answers "did Watson really learn this", while the object_'s own status answers "is the proposition itself true" — the schema keeps these independent on purpose.</p>`,
  artLabel:'cookbook.md — epistemic query',
  artifact:
 `knew_edges = [i for i in g.by_id.values() if isinstance(i, KnewAt)
@@ -120,7 +176,7 @@ for k in knew_edges:
 
 {type:'temp',icon:'ti-clock-pause',name:'sentence_cutoff',
  desc:'load_bohemia_graph(sentence_cutoff=N) loads only triplets whose sentence_ids are all strictly less than N — a temporally-bounded subgraph of everything known before that point.',
- advice:`<p>Builds a pre-revelation subgraph: stop one sentence before Watson asks "You have the photograph?" and the Possesses edge linking Irene to the photograph genuinely is not yet in the graph — it only appears 26 sentences later.</p><p>This assembles the evidence base, it does not derive a new statement. Mechanically concluding Possesses(Irene, photograph) from the assembled events would need a Rule(phi=>psi) declaration and an inference engine — a real gap, not yet built.</p>`,
+ advice:`<p>Builds a pre-revelation subgraph: stop one sentence before Watson asks "You have the photograph?" and the Possesses edge linking Irene to the photograph genuinely is not yet in the graph — it only appears 26 sentences later.</p><p>This assembles the evidence base, it does not derive a new statement. Mechanically concluding Possesses(Irene, photograph) from the assembled events would need a Rule(phi=&gt;psi) declaration and an inference engine — a real gap, not yet built.</p>`,
  artLabel:'cookbook.md — pre-revelation subgraph',
  artifact:
 `CUTOFF = 485  # "You have the photograph?"
@@ -135,20 +191,20 @@ irene_possesses = pre.edges_from("wiki:Irene_Adler",
 ];
 
 function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-function conn(){return'<div class="pconn"><div class="pci"><div class="pcl"></div><div class="pca"></div></div></div>';}
+function conn(){return`<div class="pconn"><div class="pci"><div class="pcl"></div><div class="pca"></div></div></div>`;}
 function render(s,i){
   const t=T[s.type];
-  const badge='<span class="pbadge" style="background:'+t.bg+';border:0.5px solid '+t.bd+';color:'+t.tx+'">'+t.label+'</span>';
-  const ico='<i class="ti '+s.icon+'" style="font-size:17px;color:'+t.tx+'" aria-hidden="true"></i>';
-  const art=s.artifact?'<details class="part" onclick="event.stopPropagation()"><summary><i class="ti ti-code" aria-hidden="true"></i> '+(s.artLabel||'Code artifact')+'</summary><pre><code>'+esc(s.artifact)+'</code></pre></details>':'';
-  return '<div class="ps" id="s'+i+'"><div class="ph" onclick="tog('+i+')"><span>'+ico+'</span><span class="pname">'+s.name+'</span>'+badge+'<i class="ti ti-chevron-down pchev" id="ch'+i+'" aria-hidden="true"></i></div><div class="pdesc">'+s.desc+'</div><div class="padv" id="a'+i+'">'+s.advice+'</div>'+art+'</div>';
+  const badge=`<span class="pbadge" style="background:${t.bg};border:0.5px solid ${t.bd};color:${t.tx}">${t.label}</span>`;
+  const ico=`<i class="ti ${s.icon}" style="font-size:17px;color:${t.tx}"></i>`;
+  const art=s.artifact?`<details class="part" onclick="event.stopPropagation()"><summary><i class="ti ti-code"></i> ${s.artLabel||'Code artifact'}</summary><pre><code>${esc(s.artifact)}</code></pre></details>`:'';
+  return `<div class="ps" id="s${i}"><div class="ph" onclick="tog(${i})"><span>${ico}</span><span class="pname">${s.name}</span>${badge}<i class="ti ti-chevron-down pchev" id="ch${i}"></i></div><div class="pdesc">${s.desc}</div><div class="padv" id="a${i}">${s.advice}</div>${art}</div>`;
 }
 
 const pl=document.getElementById('pl');
 let h='';
 stages.forEach((s,i)=>{
   const g=groups.find(gr=>gr.start===i);
-  if(g){ h+='<div class="stagegroup">'+g.title+'</div>'; }
+  if(g){ h+=`<div class="stagegroup">${g.title}</div>`; }
   else if(i>0){ h+=conn(); }
   h+=render(s,i);
 });
@@ -159,3 +215,5 @@ function tog(i){
   document.getElementById('ch'+i).classList.toggle('open');
 }
 </script>
+</body>
+</html>

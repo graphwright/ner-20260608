@@ -1,5 +1,57 @@
-<h2 class="sr-only">Interactive walkthrough of the six-stage Holmes ingestion pipeline as implemented in the ner_20260608 repo: sentencize, coref, merge, events, triplets, and promote</h2>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Holmes ingestion pipeline — ner_20260608</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
 <style>
+:root {
+  --color-background-primary: #ffffff;
+  --color-background-secondary: #f5f4f0;
+  --color-background-info: #e6f1fb;
+  --color-background-warning: #faeeda;
+  --color-background-success: #eaf3de;
+  --color-text-primary: #2c2c2a;
+  --color-text-secondary: #5f5e5a;
+  --color-text-tertiary: #888780;
+  --color-text-info: #185fa5;
+  --color-text-warning: #854f0b;
+  --color-text-success: #3b6d11;
+  --color-border-tertiary: rgba(44,44,42,0.15);
+  --color-border-secondary: rgba(44,44,42,0.3);
+  --color-border-info: #b5d4f4;
+  --color-border-warning: #fac775;
+  --color-border-success: #c0dd97;
+  --border-radius-md: 8px;
+  --border-radius-lg: 12px;
+  --font-sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'SFMono-Regular', 'Courier New', monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-background-primary: #1e1e1c;
+    --color-background-secondary: #2a2a28;
+    --color-background-info: #042c53;
+    --color-background-warning: #412402;
+    --color-background-success: #173404;
+    --color-text-primary: #e8e6de;
+    --color-text-secondary: #9c9a92;
+    --color-text-tertiary: #6e6d67;
+    --color-text-info: #85b7eb;
+    --color-text-warning: #fac775;
+    --color-text-success: #c0dd97;
+    --color-border-tertiary: rgba(232,230,222,0.1);
+    --color-border-secondary: rgba(232,230,222,0.2);
+    --color-border-info: #0c447c;
+    --color-border-warning: #854f0b;
+    --color-border-success: #3b6d11;
+  }
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans);background:var(--color-background-primary);color:var(--color-text-primary);padding:2rem;max-width:780px;margin:0 auto;line-height:1.5}
+h1{font-size:20px;font-weight:500;margin-bottom:6px}
+.subtitle{font-size:14px;color:var(--color-text-secondary);margin-bottom:24px}
 .ps{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:13px 15px;width:100%}
 .ph{display:flex;align-items:center;gap:9px;cursor:pointer;user-select:none}
 .ph:hover .pname{color:var(--color-text-info)}
@@ -29,7 +81,7 @@
 .part{margin-top:10px;border-top:0.5px solid var(--color-border-tertiary);padding-top:10px}
 .part summary{font-size:12px;font-weight:500;color:var(--color-text-info);cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:6px}
 .part summary::-webkit-details-marker{display:none}
-.part summary::before{content:'\25B6';font-size:9px;transition:transform .15s;display:inline-block}
+.part summary::before{content:'▶';font-size:9px;transition:transform .15s;display:inline-block}
 .part[open] summary::before{transform:rotate(90deg)}
 .part pre{margin-top:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:12px;overflow-x:auto;font-family:var(--font-mono);font-size:11px;line-height:1.5;color:var(--color-text-primary);white-space:pre}
 .part pre code{background:none;border:none;padding:0;font-size:inherit}
@@ -39,6 +91,10 @@
 .statn{font-size:18px;font-weight:500;color:var(--color-text-primary)}
 .statl{font-size:11px;color:var(--color-text-secondary);margin-top:2px}
 </style>
+</head>
+<body>
+<h1>Holmes ingestion pipeline</h1>
+<p class="subtitle">ner_20260608 — six stages, from raw text to a typed, truth-scored graph. Click a stage header for advice; expand the artifact section for the real code.</p>
 
 <div class="statrow">
 <div class="stat"><div class="statn">689</div><div class="statl">sentences</div></div>
@@ -53,7 +109,7 @@
 <span class="pbadge" style="background:var(--color-background-warning);border:0.5px solid var(--color-border-warning);color:var(--color-text-warning)">Local LLM</span>
 <span class="pbadge" style="background:var(--color-background-info);border:0.5px solid var(--color-border-info);color:var(--color-text-info)">Frontier LLM</span>
 <span class="pbadge" style="background:var(--color-background-success);border:0.5px solid var(--color-border-success);color:var(--color-text-success)">Storage</span>
-<span class="hint"><i class="ti ti-hand-click" aria-hidden="true"></i> Click header for advice &nbsp;&middot;&nbsp; <i class="ti ti-code" aria-hidden="true"></i> Expand for artifact</span>
+<span class="hint"><i class="ti ti-hand-click"></i> Click header for advice &nbsp;&middot;&nbsp; <i class="ti ti-code"></i> Expand for artifact</span>
 </div>
 
 <div id="pl"></div>
@@ -121,7 +177,7 @@ for label in labels:
 },
 
 {type:'front',icon:'ti-id-badge',name:'Wiki linking + dedup',
- out:{file:'bohemia_entities.jsonl',desc:'75 entities. wiki:&lt;slug&gt; or provisional:&lt;n&gt;.'},
+ out:{file:'bohemia_entities.jsonl',desc:'75 entities. wiki:<slug> or provisional:<n>.'},
  desc:'Opensearch candidates judged by Claude rather than blind string match. A post-link pass merges clusters that resolved to the same wiki page.',
  advice:`<p>Plain opensearch over-links — "the King" can match an unrelated article on string similarity alone. Claude judges candidates against story context with an explicit none-of-these option.</p><p>dedup_by_entity_id catches the case where "Dr Watson" and "John" independently cluster but both resolve to wiki:John_Watson — union the aliases, keep the longer canonical.</p>`,
  artLabel:'merge.py — dedup_by_entity_id',
@@ -133,7 +189,7 @@ for label in labels:
 
 {type:'front',icon:'ti-clock-play',name:'Event and moment extraction',
  out:{file:'bohemia_events.jsonl + bohemia_moments.jsonl',desc:'178 events, 36 moments.'},
- desc:'Distinguishes bounded actions from states. A Moment with a narrator_id sits on that person\\'s epistemic timeline rather than the objective one.',
+ desc:"Distinguishes bounded actions from states. A Moment with a narrator_id sits on that person's epistemic timeline rather than the objective one.",
  advice:`<p>Distinguishing action from state, and resolving Watson's indirect narration (he often reports what Holmes told him), requires narrative reasoning the local model handles unreliably.</p><p>A SlugRegistry enforces global uniqueness of sib:event: and sib:moment: slugs across the whole run, including resumed runs.</p>`,
  artLabel:'events.py — validate_event',
  artifact:
@@ -172,24 +228,24 @@ else:                           new_status = "hypothetical"`
 ];
 
 function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-function conn(){return'<div class="pconn"><div class="pci"><div class="pcl"></div><div class="pca"></div></div></div>';}
+function conn(){return`<div class="pconn"><div class="pci"><div class="pcl"></div><div class="pca"></div></div></div>`;}
 function fileCard(f){
-  return'<div class="pfile"><div class="pfile-name"><i class="ti ti-file-text" aria-hidden="true"></i> '+f.file+'</div><div class="pfile-desc">'+f.desc+'</div></div>';
+  return`<div class="pfile"><div class="pfile-name"><i class="ti ti-file-text"></i> ${f.file}</div><div class="pfile-desc">${f.desc}</div></div>`;
 }
 function render(s,i){
   const t=T[s.type];
-  const badge='<span class="pbadge" style="background:'+t.bg+';border:0.5px solid '+t.bd+';color:'+t.tx+'">'+t.label+'</span>';
-  const ico='<i class="ti '+s.icon+'" style="font-size:17px;color:'+t.tx+'" aria-hidden="true"></i>';
+  const badge=`<span class="pbadge" style="background:${t.bg};border:0.5px solid ${t.bd};color:${t.tx}">${t.label}</span>`;
+  const ico=`<i class="ti ${s.icon}" style="font-size:17px;color:${t.tx}"></i>`;
   const side=(s.out?fileCard(s.out):'');
-  const art=s.artifact?'<details class="part" onclick="event.stopPropagation()"><summary><i class="ti ti-code" aria-hidden="true"></i> '+(s.artLabel||'Code artifact')+'</summary><pre><code>'+esc(s.artifact)+'</code></pre></details>':'';
-  return '<div class="prow"><div class="prm"><div class="ps" id="s'+i+'"><div class="ph" onclick="tog('+i+')"><span>'+ico+'</span><span class="pname">'+s.name+'</span>'+badge+'<i class="ti ti-chevron-down pchev" id="ch'+i+'" aria-hidden="true"></i></div><div class="pdesc">'+s.desc+'</div><div class="padv" id="a'+i+'">'+s.advice+'</div>'+art+'</div></div><div class="prs">'+side+'</div></div>';
+  const art=s.artifact?`<details class="part" onclick="event.stopPropagation()"><summary><i class="ti ti-code"></i> ${s.artLabel||'Code artifact'}</summary><pre><code>${esc(s.artifact)}</code></pre></details>`:'';
+  return `<div class="prow"><div class="prm"><div class="ps" id="s${i}"><div class="ph" onclick="tog(${i})"><span>${ico}</span><span class="pname">${s.name}</span>${badge}<i class="ti ti-chevron-down pchev" id="ch${i}"></i></div><div class="pdesc">${s.desc}</div><div class="padv" id="a${i}">${s.advice}</div>${art}</div></div><div class="prs">${side}</div></div>`;
 }
 
 const pl=document.getElementById('pl');
 let h='';
 stages.forEach((s,i)=>{
   const g=groups.find(gr=>gr.start===i);
-  if(g){ h+='<div class="stagegroup">'+g.title+'</div>'; }
+  if(g){ h+=`<div class="stagegroup">${g.title}</div>`; }
   else if(i>0){ h+=conn(); }
   h+=render(s,i);
 });
@@ -200,3 +256,5 @@ function tog(i){
   document.getElementById('ch'+i).classList.toggle('open');
 }
 </script>
+</body>
+</html>
