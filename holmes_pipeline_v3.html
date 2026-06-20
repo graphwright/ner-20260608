@@ -1,0 +1,202 @@
+<h2 class="sr-only">Interactive walkthrough of the six-stage Holmes ingestion pipeline as implemented in the ner_20260608 repo: sentencize, coref, merge, events, triplets, and promote</h2>
+<style>
+.ps{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:13px 15px;width:100%}
+.ph{display:flex;align-items:center;gap:9px;cursor:pointer;user-select:none}
+.ph:hover .pname{color:var(--color-text-info)}
+.pbadge{padding:2px 8px;border-radius:var(--border-radius-md);font-size:11px;font-weight:500;white-space:nowrap}
+.pname{font-size:14px;font-weight:500;color:var(--color-text-primary);flex:1;transition:color .15s}
+.pdesc{font-size:12px;color:var(--color-text-secondary);margin:7px 0 0;line-height:1.5}
+.padv{font-size:13px;color:var(--color-text-secondary);margin:10px 0 0;padding:11px 13px;background:var(--color-background-secondary);border-radius:var(--border-radius-md);border-left:2px solid var(--color-border-secondary);display:none;line-height:1.6}
+.padv.open{display:block}
+.padv p{margin:5px 0}
+.padv p:first-child{margin-top:0}
+.padv code,.part code{font-family:var(--font-mono);font-size:12px;background:var(--color-background-secondary);padding:1px 5px;border-radius:4px;border:0.5px solid var(--color-border-tertiary)}
+.pchev{color:var(--color-text-tertiary);font-size:13px;transition:transform .2s;flex-shrink:0}
+.open .pchev{transform:rotate(180deg)}
+.pconn{display:flex;padding:0 0 0 22px;margin:3px 0}
+.pci{display:flex;flex-direction:column;align-items:center}
+.pcl{width:1.5px;height:18px;background:var(--color-border-secondary)}
+.pca{width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:6px solid var(--color-border-secondary)}
+.prow{display:flex;gap:10px;align-items:flex-start}
+.prm{flex:1;min-width:0}
+.prs{width:178px;flex-shrink:0}
+.pfile{border:0.5px solid var(--color-border-success);border-radius:var(--border-radius-md);padding:9px 11px;background:var(--color-background-success);margin-top:16px}
+.pfile-name{font-size:11px;font-weight:500;color:var(--color-text-success);font-family:var(--font-mono);display:flex;align-items:center;gap:5px}
+.pfile-desc{font-size:11px;color:var(--color-text-secondary);margin-top:3px;line-height:1.4}
+.legend{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:18px;padding:9px 13px;background:var(--color-background-secondary);border-radius:var(--border-radius-lg);border:0.5px solid var(--color-border-tertiary);align-items:center}
+.legend-label{font-size:12px;color:var(--color-text-secondary);font-weight:500;margin-right:2px}
+.hint{font-size:11px;color:var(--color-text-tertiary);margin-left:6px}
+.part{margin-top:10px;border-top:0.5px solid var(--color-border-tertiary);padding-top:10px}
+.part summary{font-size:12px;font-weight:500;color:var(--color-text-info);cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:6px}
+.part summary::-webkit-details-marker{display:none}
+.part summary::before{content:'\25B6';font-size:9px;transition:transform .15s;display:inline-block}
+.part[open] summary::before{transform:rotate(90deg)}
+.part pre{margin-top:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:12px;overflow-x:auto;font-family:var(--font-mono);font-size:11px;line-height:1.5;color:var(--color-text-primary);white-space:pre}
+.part pre code{background:none;border:none;padding:0;font-size:inherit}
+.stagegroup{font-size:11px;font-weight:500;color:var(--color-text-tertiary);margin:18px 0 6px 2px;text-transform:uppercase;letter-spacing:.04em}
+.statrow{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:18px}
+.stat{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:9px 11px;text-align:center}
+.statn{font-size:18px;font-weight:500;color:var(--color-text-primary)}
+.statl{font-size:11px;color:var(--color-text-secondary);margin-top:2px}
+</style>
+
+<div class="statrow">
+<div class="stat"><div class="statn">689</div><div class="statl">sentences</div></div>
+<div class="stat"><div class="statn">75</div><div class="statl">entities</div></div>
+<div class="stat"><div class="statn">178</div><div class="statl">events</div></div>
+<div class="stat"><div class="statn">36</div><div class="statl">moments</div></div>
+</div>
+
+<div class="legend">
+<span class="legend-label">Compute</span>
+<span class="pbadge" style="background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-secondary)">Source</span>
+<span class="pbadge" style="background:var(--color-background-warning);border:0.5px solid var(--color-border-warning);color:var(--color-text-warning)">Local LLM</span>
+<span class="pbadge" style="background:var(--color-background-info);border:0.5px solid var(--color-border-info);color:var(--color-text-info)">Frontier LLM</span>
+<span class="pbadge" style="background:var(--color-background-success);border:0.5px solid var(--color-border-success);color:var(--color-text-success)">Storage</span>
+<span class="hint"><i class="ti ti-hand-click" aria-hidden="true"></i> Click header for advice &nbsp;&middot;&nbsp; <i class="ti ti-code" aria-hidden="true"></i> Expand for artifact</span>
+</div>
+
+<div id="pl"></div>
+
+<script>
+const T={
+  source:{bg:'var(--color-background-secondary)',bd:'var(--color-border-secondary)',tx:'var(--color-text-secondary)',label:'Source'},
+  local: {bg:'var(--color-background-warning)', bd:'var(--color-border-warning)', tx:'var(--color-text-warning)',label:'Local LLM'},
+  front: {bg:'var(--color-background-info)',    bd:'var(--color-border-info)',    tx:'var(--color-text-info)',   label:'Frontier LLM'},
+  store: {bg:'var(--color-background-success)', bd:'var(--color-border-success)', tx:'var(--color-text-success)',label:'Storage'},
+};
+
+const groups=[
+{title:'src/sentencize.py',start:0,end:1},
+{title:'src/coref.py',start:1,end:2},
+{title:'src/merge.py',start:2,end:4},
+{title:'src/events.py',start:4,end:5},
+{title:'src/triplets.py',start:5,end:6},
+{title:'src/promote.py',start:6,end:7},
+];
+
+const stages=[
+
+{type:'source',icon:'ti-book',name:'Source text',
+ desc:'A Scandal in Bohemia, plain text. Paragraphs split on blank lines, Gutenberg header and footer stripped before processing.',
+ advice:`<p>689 sentences, 218 paragraphs once split. This is a closed-world corpus — one story, fixed content, fully reproducible end to end.</p>`,
+},
+
+{type:'local',icon:'ti-scissors',name:'LLM sentence splitter',
+ desc:'One paragraph per LLM call, both Ollama and Anthropic backends supported via --anthropic. Returns id, para, and verbatim text per sentence.',
+ advice:`<p>id is re-sequenced from the running offset after parsing regardless of what the model emitted, eliminating cross-call id drift. Resume reads the highest id and para already written.</p><p>Sidesteps Doyle's abbreviations entirely — "Dr. Watson" and "Mr. Holmes" never trip a boundary, since the model understands the prose rather than pattern-matching periods.</p>`,
+ artLabel:'sentencize.py — process_paragraph',
+ artifact:
+`for i, rec in enumerate(records):
+    rec["id"] = id_offset + i   # re-sequence regardless of model drift
+
+# {"id": 42, "para": 11, "text": "His Majesty had hardly spoken
+#  before Holmes had sprung from his chair..."}`
+},
+
+{type:'local',icon:'ti-link',name:'Coreference resolution',
+ out:{file:'bohemia_coref.jsonl',desc:'One record per chunk: entity label clusters with sentence-level mentions.'},
+ desc:'Chunks of 20 sentences with 3-sentence carry-in context. Clusters every noun phrase, proper noun and pronoun referring to the same entity.',
+ advice:`<p>A context leak guard filters out any mention whose sentence_id falls outside the current chunk — models occasionally pull an id from the context block despite instruction.</p><p>extract_json_objects scans with JSONDecoder.raw_decode rather than regex, correctly handling nested braces and objects embedded in prose.</p>`,
+ artLabel:'coref.py — parse_entity_response',
+ artifact:
+`if sid not in valid_ids:
+    continue  # model leaked a context sentence
+
+# {"label": "Irene Adler", "type": "person", "mentions": [
+#    {"sentence_id": 1, "span": "the woman", "confidence": 0.95},
+#    {"sentence_id": 7, "span": "she", "confidence": 0.85}]}`
+},
+
+{type:'front',icon:'ti-git-merge',name:'Label clustering',
+ desc:'All unique entity labels across every chunk, one Claude call. Groups labels referring to the same entity and nominates a canonical name.',
+ advice:`<p>"His Majesty", "the King", "Wilhelm Gottsreich" only cluster correctly with holistic narrative reasoning — a 14B local model can't reliably do this.</p><p>A safety net adds a singleton cluster for any label Claude silently drops, so nothing falls through unaccounted for.</p>`,
+ artLabel:'merge.py — cluster_labels_claude',
+ artifact:
+`# Safety net: any label Claude dropped becomes a singleton
+for label in labels:
+    if label not in assigned:
+        clusters.append({"canonical": label, "aliases": [label],
+                         "type": "other"})`
+},
+
+{type:'front',icon:'ti-id-badge',name:'Wiki linking + dedup',
+ out:{file:'bohemia_entities.jsonl',desc:'75 entities. wiki:&lt;slug&gt; or provisional:&lt;n&gt;.'},
+ desc:'Opensearch candidates judged by Claude rather than blind string match. A post-link pass merges clusters that resolved to the same wiki page.',
+ advice:`<p>Plain opensearch over-links — "the King" can match an unrelated article on string similarity alone. Claude judges candidates against story context with an explicit none-of-these option.</p><p>dedup_by_entity_id catches the case where "Dr Watson" and "John" independently cluster but both resolve to wiki:John_Watson — union the aliases, keep the longer canonical.</p>`,
+ artLabel:'merge.py — dedup_by_entity_id',
+ artifact:
+`best = max(group, key=lambda c: len(c["canonical"].split()))
+# merged 3 clusters -> wiki:John_Watson:
+#   ['Dr Watson', 'John', 'Doctor']`
+},
+
+{type:'front',icon:'ti-clock-play',name:'Event and moment extraction',
+ out:{file:'bohemia_events.jsonl + bohemia_moments.jsonl',desc:'178 events, 36 moments.'},
+ desc:'Distinguishes bounded actions from states. A Moment with a narrator_id sits on that person\\'s epistemic timeline rather than the objective one.',
+ advice:`<p>Distinguishing action from state, and resolving Watson's indirect narration (he often reports what Holmes told him), requires narrative reasoning the local model handles unreliably.</p><p>A SlugRegistry enforces global uniqueness of sib:event: and sib:moment: slugs across the whole run, including resumed runs.</p>`,
+ artLabel:'events.py — validate_event',
+ artifact:
+`_SLUG_RE = re.compile(r'^sib:(event|moment):[a-z][a-z0-9_]*$')
+
+# {"id": "sib:event:fake_fire_alarm",
+#  "description": "Holmes, disguised as a clergyman, stages a
+#                   fake fire alarm at Briony Lodge.",
+#  "participants": ["wiki:Sherlock_Holmes", "wiki:Irene_Adler"]}`
+},
+
+{type:'local',icon:'ti-arrows-right-left',name:'Triplet extraction',
+ out:{file:'bohemia_triplets.jsonl',desc:'Predicate instances. truth_status always hypothetical out of this stage.'},
+ desc:'Slot-filling against a fixed predicate catalogue and a short alias-id entity index. Domain and range enforced in Python, never trusted from the model.',
+ advice:`<p>Long canonical URIs get ignored in favour of invented ids — short aliases like person:sherlock_holmes are injected instead, then expanded back to canonical ids after validation.</p><p>Events and moments are filtered to a window of sentences around the current chunk; injecting all 178 regardless of relevance was both slow and a source of invented ids.</p>`,
+ artLabel:'triplets.py — validate_triplet',
+ artifact:
+`resolved_subj_type = alias_to_type.get(subj_alias, subj_type)
+# ground truth from the index, not the model's own claim
+
+if not valid_types(predicate, resolved_subj_type, resolved_obj_type):
+    return None  # domain/range violation, dropped with a warning`
+},
+
+{type:'local',icon:'ti-arrow-big-up-lines',name:'Truth status promotion',
+ out:{file:'bohemia_triplets.jsonl',desc:'In-place update: hypothetical -> asserted_true / disputed by confidence.'},
+ desc:'Threshold rules over extraction_confidence promote triplets out of the conservative hypothetical default the extraction stage leaves them in.',
+ advice:`<p>&gt;= 0.9 confidence promotes to asserted_true; 0.7-0.9 becomes disputed; below 0.7 stays hypothetical. Thresholds are tuned to the Bohemia confidence distribution and overridable per run.</p><p>This is a judgment the extraction pass deliberately defers — the pipeline reports what it found, promotion is a separate, auditable decision.</p>`,
+ artLabel:'promote.py — promote_record',
+ artifact:
+`if conf >= assert_threshold:   new_status = "asserted_true"
+elif conf >= dispute_threshold: new_status = "disputed"
+else:                           new_status = "hypothetical"`
+},
+
+];
+
+function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function conn(){return'<div class="pconn"><div class="pci"><div class="pcl"></div><div class="pca"></div></div></div>';}
+function fileCard(f){
+  return'<div class="pfile"><div class="pfile-name"><i class="ti ti-file-text" aria-hidden="true"></i> '+f.file+'</div><div class="pfile-desc">'+f.desc+'</div></div>';
+}
+function render(s,i){
+  const t=T[s.type];
+  const badge='<span class="pbadge" style="background:'+t.bg+';border:0.5px solid '+t.bd+';color:'+t.tx+'">'+t.label+'</span>';
+  const ico='<i class="ti '+s.icon+'" style="font-size:17px;color:'+t.tx+'" aria-hidden="true"></i>';
+  const side=(s.out?fileCard(s.out):'');
+  const art=s.artifact?'<details class="part" onclick="event.stopPropagation()"><summary><i class="ti ti-code" aria-hidden="true"></i> '+(s.artLabel||'Code artifact')+'</summary><pre><code>'+esc(s.artifact)+'</code></pre></details>':'';
+  return '<div class="prow"><div class="prm"><div class="ps" id="s'+i+'"><div class="ph" onclick="tog('+i+')"><span>'+ico+'</span><span class="pname">'+s.name+'</span>'+badge+'<i class="ti ti-chevron-down pchev" id="ch'+i+'" aria-hidden="true"></i></div><div class="pdesc">'+s.desc+'</div><div class="padv" id="a'+i+'">'+s.advice+'</div>'+art+'</div></div><div class="prs">'+side+'</div></div>';
+}
+
+const pl=document.getElementById('pl');
+let h='';
+stages.forEach((s,i)=>{
+  const g=groups.find(gr=>gr.start===i);
+  if(g){ h+='<div class="stagegroup">'+g.title+'</div>'; }
+  else if(i>0){ h+=conn(); }
+  h+=render(s,i);
+});
+pl.innerHTML=h;
+
+function tog(i){
+  document.getElementById('a'+i).classList.toggle('open');
+  document.getElementById('ch'+i).classList.toggle('open');
+}
+</script>
