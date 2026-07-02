@@ -212,67 +212,243 @@ Medical literature (PubMed abstracts, clinical notes, drug-label text) differs
 from literary fiction in almost every dimension that matters for NER. Here is
 how each stage would need to change.
 
+The analysis below is grounded in a working implementation: the `medlit` module
+in the `graphwright/kgraph` repository has been battle-tested on nearly 200
+PubMed papers and represents the concrete lessons learned from that work.
+
+---
+
 ### Fundamental differences
 
 | Dimension | Sherlock Holmes (current) | Medical literature |
 |---|---|---|
-| Entity types | Person, Place, Object, Organisation | Drug, Disease, Gene, Protein, Dosage, Adverse Event, Clinical Trial, Patient Cohort |
-| Coreference | Pronoun chains across paragraphs | Abbreviation expansion ("AML" → "acute myeloid leukaemia"), anaphoric noun phrases ("the compound", "this cohort") |
-| Predicate vocabulary | Knows, LocatedIn, Possesses, DisguisedAs | Treats, Contraindicated­With, Metabolised­By, UpRegulates, AssociatedWith (risk), Dosage­For, ReportedIn |
+| Entity types | Person, Place, Object, Organisation | Disease, Gene, Drug, Protein, Hormone, Enzyme, Biomarker, Symptom, Procedure, Mutation, Pathway, BiologicalProcess, AnatomicalStructure, and metadata types (Author, Institution, Paper) |
+| Coreference | Pronoun chains across paragraphs | Abbreviation expansion ("AML" → "acute myeloid leukaemia"), anaphoric noun phrases ("the compound", "this cohort"), British/American spelling variants |
+| Predicate vocabulary | Knows, LocatedIn, Possesses, DisguisedAs | TREATS, CAUSES, INHIBITS, REGULATES, INCREASES_RISK, PREVENTS, INTERACTS_WITH, ENCODES, SUBTYPE_OF, INDICATES, LOCATED_IN, ASSOCIATED_WITH |
 | Temporal reasoning | Narrative chronology, reported speech | Trial phases, treatment windows, follow-up periods, dose schedules |
-| Ground-truth sources | Baker Street Fandom wiki | UMLS, MeSH, DrugBank, ClinVar, UniProt, ClinicalTrials.gov |
-| Ambiguity profile | Literary circumlocution, pronoun chains | Polysemous abbreviations (e.g. "MS" = multiple sclerosis *or* mass spectrometry), cross-species gene names |
+| Ground-truth sources | Baker Street Fandom wiki | UMLS (CUI), HGNC (genes), RxNorm (drugs), UniProt (proteins), MeSH (diseases), ROR (institutions), ORCID (authors) |
+| Ambiguity profile | Literary circumlocution, pronoun chains | Polysemous abbreviations ("MS" = multiple sclerosis *or* mass spectrometry), cross-species gene names, British/American spelling |
+| Scale | One document | Hundreds of papers; cross-paper entity deduplication is essential |
 
-### Step-by-step changes
+---
 
-**Step 1 — Sentencize:** Minimal change needed. Medical abstracts are already
-well-structured, so a rule-based sentence splitter (`spaCy` with a biomedical
-model, or `scispaCy`) is often sufficient and faster than an LLM call. For
-clinical notes (informal, heavily abbreviated) an LLM splitter remains
-beneficial.
+### A restructured pipeline for medical literature
 
-**Step 2 — Coreference:** The system prompt must be rewritten for biomedical
-text. Abbreviation expansion ("the drug" → which drug?) and species-specific
-pronoun contexts require domain-tuned examples. A biomedical-fine-tuned model
-(e.g. `BioMedBERT`, `PubMedBERT`, or a fine-tuned `qwen2.5`) outperforms a
-general-purpose LLM at the same parameter count. The chunk-and-overlap strategy
-is retained.
+The literary pipeline maps well to a series of distinct stages, but the medical
+literature variant that emerged from the kgraph/medlit work uses a different
+four-stage structure that is better suited to processing a large corpus of
+scientific papers:
 
-**Step 3 — Entity Merge:** The wiki-linking target changes entirely. Instead
-of the Baker Street Fandom wiki, linking should target:
-- **UMLS Metathesaurus** for diseases and symptoms
-- **DrugBank** or **ChEMBL** for drugs and small molecules
-- **UniProt** for proteins and genes
-- **ClinicalTrials.gov** for trials
+```
+pmc_xmls/  (JATS-XML or pre-parsed JSON)
+    │
+    ▼  Stage 0 — fetch_vocab  (cheap entity-only pass across all papers)
+vocab/vocab.json + seeded_synonym_cache.json
+    │
+    ▼  Stage 1 — extract  (full entity + relationship extraction, one LLM call per paper)
+bundles/paper_PMC*.json
+    │
+    ▼  Stage 2 — ingest / dedup  (cross-paper deduplication and entity promotion)
+merged/entities.json + relationships.json
+    │
+    ▼  Stage 3 — build_bundle  (package for graph ingestion)
+output/ (kgbundle format)
+```
 
-The label-clustering prompt must know that two labels that look very similar
-("methotrexate" vs. "MTX") are the same entity, while two labels that look
-different ("HER2" vs. "ERBB2") are also the same entity. This requires
-biomedical world-knowledge — a frontier model or a specialised biomedical NER
-model (e.g. `SciSpaCy`'s `en_ner_bionlp13cg_md`) is needed here.
+---
 
-**Step 4 — Events & Moments:** The predicate ontology shifts dramatically.
-Instead of narrative events ("Holmes disguises himself"), the relevant events are
-clinical: treatment administration, adverse event onset, trial enrollment,
-lab-result observation. The event-extraction prompt must be rewritten around
-clinical trial structure, PICO framing (Population, Intervention, Comparison,
-Outcome), and causal/correlational hedging ("was associated with", "did not
-significantly differ"). Frontier models remain necessary; specialised biomedical
-LLMs (e.g. MedPaLM 2, BioGPT, or fine-tuned Llama variants) may outperform
-general-purpose Claude on highly technical content.
+### Stage 0 — fetch_vocab
 
-**Step 5 — Triplets:** The predicate vocabulary (`holmes_schema.py`) must be
-replaced with a biomedical relation schema. A suitable starting point is the
-relation types in the **BioRED** or **DDI Extraction** shared tasks:
-`Treats`, `Causes`, `Contraindicated_With`, `Metabolised_By`,
-`UpRegulates`, `DownRegulates`, `Associated_With`. The slot-filling prompt
-must be rewritten with biomedical examples and the alias-ID strategy is retained
-as-is.
+**What it does:** Before running full extraction, a cheap LLM call per paper
+extracts entities only (no relationships). Results are merged into a shared
+`vocab.json` keyed by `(normalized name, type)`. Each entry accumulates the
+list of papers it appeared in and any abbreviations the LLM noted.
 
-**Step 6 — Promotion:** The confidence threshold calibration would need
-re-tuning for biomedical text (where false positives carry higher stakes than
-in literary analysis). Domain-specific human review of a sample is strongly
-recommended before treating `asserted_true` records as reliable clinical facts.
+**Why this matters:** The vocabulary pre-pass solves two problems:
+
+1. *Consistent naming*: The extraction prompt in Stage 1 can include the
+   accumulated vocabulary, biasing the model toward canonical entity names seen
+   across the corpus rather than paper-specific surface forms.
+2. *UMLS type validation*: Any `umls_id` the model assigns is validated against
+   the UMLS Metathesaurus API. If the assigned entity type conflicts with the
+   UMLS semantic type for that CUI, it is automatically corrected. This catches
+   a common class of LLM error (typing a drug as a protein, or a gene as a
+   disease) before the expensive extraction pass runs.
+
+**Output:** `vocab.json` (entity list) and `seeded_synonym_cache.json` (a
+pre-seeded merge index that feeds Stage 2 deduplication).
+
+**Local vs. frontier:** The vocabulary prompt is intentionally simpler than the
+full extraction prompt. Local models (e.g. `BioMistral-7B` via Ollama) handle
+it well and are the practical choice at corpus scale. UMLS validation is an API
+call independent of which model was used.
+
+---
+
+### Stage 1 — extract (entities + relationships, one call per paper)
+
+**What it does:** Unlike the literary pipeline's six sequential steps, the
+medical variant does entity extraction and relationship extraction in a single
+LLM call per paper. The model is given the full paper text (title + body, up to
+500 k characters) and returns a JSON bundle with:
+
+- `entities` — each with `id`, `name`, `class` (entity type), optional
+  `canonical_id` (UMLS CUI, HGNC, etc.)
+- `relationships` — subject/object entity IDs, `predicate`, `linguistic_trust`,
+  `evidence_ids`
+- `evidence_entities` — text spans that justify each relationship, with
+  `paper_id:section:paragraph_idx:llm` IDs
+- `paper` — metadata (title, authors, DOI, PMC ID, study type)
+
+A second, cheaper LLM call extracts structured study-design metadata:
+`study_type` (RCT, observational, meta-analysis, …), `sample_size`,
+`multicenter`, and `held_out_validation`.
+
+**Provenance expansion:** Author, Institution, and Paper entities plus
+`AUTHORED`, `AFFILIATED_WITH`, and `DESCRIBED` relationships are automatically
+derived from the paper metadata and injected into the bundle. This wires the
+authorship graph without any additional LLM calls.
+
+**Key prompt conventions that emerged from practice:**
+
+- `linguistic_trust` on every relationship — `"asserted"`, `"suggested"`, or
+  `"speculative"` — tracks how hedged the source language is ("was associated
+  with" vs. "significantly reduced").
+- Evidence IDs use the format `{paper_id}:{section}:{paragraph_idx}:llm`. The
+  model outputs `==CURRENT_PAPER==` as a placeholder (it cannot know its own
+  PMC ID); the pipeline replaces this at write time.
+- Entity type disambiguation rules are embedded in the prompt:
+  *classify at the most specific functional role* (Enzyme over Protein,
+  Hormone over Protein), extract pathological processes (hyperplasia,
+  atrophy) as Symptom entities.
+- Common high-value entities are always extracted even if only mentioned
+  tangentially: chemotherapy regimens (FOLFIRINOX, gemcitabine), biomarkers
+  (CA19-9, KRAS), radiation modalities (SBRT, IMRT), surgical procedures.
+
+**Local vs. frontier:** All three LLM backends (`anthropic`, `openai`, `ollama`)
+are supported. The hard part for local models is accurate UMLS CUI assignment and
+type disambiguation. The vocabulary pre-pass helps, but frontier models
+(`claude-sonnet-*`) still produce noticeably fewer type errors and more complete
+canonical ID coverage on complex oncology papers.
+
+---
+
+### Stage 2 — ingest / dedup
+
+**What it does:** Reads all per-paper bundles and merges entities across the
+corpus into a single deduplicated graph. This is the stage where scale forces
+the most complexity.
+
+**Deduplication strategy (multiple passes in priority order):**
+
+1. *Authoritative ID match* — entities sharing a UMLS CUI, HGNC ID, RxNorm ID,
+   UniProt accession, or MeSH ID are merged immediately regardless of name
+   differences. The ID hierarchy: HGNC > UMLS > RxNorm > UniProt > MeSH.
+2. *SAME_AS resolution* — the model sometimes outputs explicit
+   `SAME_AS` relationships (e.g. "methotrexate" SAME_AS "MTX"). These are
+   resolved before dedup so the synonym cache can be seeded.
+3. *Synonym cache lookup* — the seeded cache from `fetch_vocab` ensures that
+   name variants seen across papers are resolved consistently.
+4. *Embedding similarity* — remaining unmatched entities are compared by cosine
+   similarity of their name embeddings; pairs above 0.88 cosine similarity are
+   merged. This catches spelling variants and paraphrases not covered by the
+   vocabulary pre-pass.
+5. *British/American spelling normalisation* — a hardcoded map handles common
+   pairs (`hyperglycaemia`/`hyperglycemia`, `leukaemia`/`leukemia`, etc.)
+   before any lookup.
+
+**What could run locally:** Dedup is pure Python + embedding inference; no
+frontier LLM is needed here. A local embedding model (e.g. `nomic-embed-text`
+via Ollama) is sufficient for the similarity step.
+
+---
+
+### Stage 3 — build_bundle
+
+**What it does:** Packages the merged entities and relationships from Stage 2
+into the `kgbundle` format for graph ingestion, cross-referencing back to the
+per-paper source bundles and optionally copying the original JATS-XML files
+alongside the bundle for provenance tracing.
+
+---
+
+### Mapping to the Holmes pipeline stages
+
+For reference, here is how the literary pipeline stages map to the medical
+literature pipeline:
+
+| Holmes stage | Medical equivalent | Notes |
+|---|---|---|
+| Step 1 — Sentencize | (absorbed into Stage 1 parser) | JATS-XML has explicit section structure; sentence splitting is handled by `JournalArticleParser`. For clinical notes an LLM splitter is still useful. |
+| Step 2 — Coreference | (absorbed into Stage 1 prompt) | Abbreviation expansion and anaphora are handled in the single-pass extraction prompt; the chunk-and-overlap strategy is replaced by chunking at section boundaries. |
+| Step 3 — Entity Merge / Wiki Linking | Stage 0 (vocab pre-pass) + Stage 2 (dedup) | Wiki linking is replaced by UMLS/HGNC/RxNorm/UniProt authority lookup. |
+| Step 4 — Events & Moments | Stage 1 (single-call extraction) | Discrete event/moment modelling is replaced by PICO-framed relationship extraction with `linguistic_trust` annotation. |
+| Step 5 — Triplet Extraction | Stage 1 (same call) | Slot-filling into a fixed predicate vocabulary is retained; the predicate set is replaced with a biomedical schema (see below). |
+| Step 6 — Promotion | Stage 2 (dedup + canonical ID assignment) | Confidence-based promotion is folded into the cross-paper dedup pass. `linguistic_trust` replaces the binary confidence threshold. |
+
+---
+
+### Predicate vocabulary for medical literature
+
+The kgraph/medlit implementation uses these predicates (derived from the
+`domain_spec.py` in `graphwright/kgraph`):
+
+| Predicate | Subject types | Object types | Notes |
+|---|---|---|---|
+| `TREATS` | Drug, Procedure | Disease | Therapeutic use |
+| `CAUSES` | Gene, Mutation, Hormone | Disease, Symptom | Causal mechanism |
+| `INHIBITS` | Drug, Protein | Protein, Pathway | Inhibition |
+| `REGULATES` | Drug, Gene | Gene, Pathway | Up- or down-regulation |
+| `INCREASES_RISK` | Gene, Mutation | Disease | Risk factor |
+| `PREVENTS` | Drug | Disease | Prophylactic use |
+| `INTERACTS_WITH` | Drug | Drug | Drug-drug interaction (symmetric) |
+| `ENCODES` | Gene | Protein | |
+| `SUBTYPE_OF` | Disease | Disease | Nosological hierarchy |
+| `INDICATES` | Biomarker, Evidence | Disease | Diagnostic signal |
+| `LOCATED_IN` | Symptom, Disease | AnatomicalStructure | Anatomical site |
+| `ASSOCIATED_WITH` | any | any | General; use when no specific predicate fits (symmetric) |
+| `SAME_AS` | any | any | Coreference / synonym merge signal |
+| `AUTHORED` | Author | Paper | Auto-generated from metadata |
+| `AFFILIATED_WITH` | Author | Institution | Auto-generated from metadata |
+| `DESCRIBED` | Paper | any | Top 2 central entities per paper |
+| `CITES` | Paper | Paper | Citation graph |
+
+---
+
+### Full entity type set
+
+The entity types used in the battle-tested implementation (from
+`medlit/medlit/domain_spec.py` in `graphwright/kgraph`):
+
+**Biomedical:** Disease, Gene, Drug, Protein, Hormone, Enzyme, Biomarker,
+Symptom, Procedure, Mutation, Pathway, BiologicalProcess, AnatomicalStructure,
+Hypothesis
+
+**Metadata (auto-extracted from paper header):** Author, Institution, Paper
+
+**Epidemiological:** Location, Ethnicity
+
+**Internal:** Evidence (text-span evidence entities)
+
+---
+
+### Canonical ID authorities
+
+The dedup stage recognises these authoritative IDs for entity merging (highest
+to lowest priority for genes):
+
+| Authority | Format | Used for |
+|---|---|---|
+| HGNC | `HGNC:12345` | Genes (highest priority) |
+| UMLS | `C0000000` (CUI) | Diseases, symptoms, procedures |
+| RxNorm | `RxNorm:12345` | Drugs |
+| UniProt | `P12345` / `Q12345` | Proteins |
+| MeSH | `D012345` | Diseases, drugs |
+| ROR | `https://ror.org/…` | Institutions |
+| ORCID | `ORCID:…` | Authors |
+| PMC | `PMC1234567` | Papers |
+
+---
 
 ### What could still run locally in the medical domain?
 
@@ -280,14 +456,16 @@ The local/frontier split looks similar to the literary case, with one important
 shift: biomedical-fine-tuned models in the 7B–14B range (e.g. `BioMistral-7B`,
 `Meditron-7B`) are substantially better than general-purpose models of the same
 size on entity recognition and relation extraction from scientific text. Using
-such a model via Ollama for steps 1, 2, and 5 would close much of the quality
-gap with a frontier model — without incurring API cost.
+such a model via Ollama for the vocab pre-pass and entity extraction closes
+much of the quality gap with a frontier model — without incurring API cost.
 
-Steps 3 and 4 remain the hardest to run locally because they require broad
-world-knowledge of the biomedical literature (entity disambiguation across
-synonyms and abbreviations, clinical trial reasoning). Frontier models or
-specialised biomedical APIs (e.g. a self-hosted BiomedBERT ensemble) are the
-practical options here.
+The hardest parts to run locally are accurate UMLS CUI assignment (requires
+broad biomedical knowledge) and type disambiguation on ambiguous entities.
+Frontier models or specialised biomedical APIs (e.g. a self-hosted BiomedBERT
+ensemble) remain the practical options for high-quality canonical ID coverage.
+
+The dedup stage (Stage 2) and build_bundle stage (Stage 3) require no frontier
+LLM at all; they run on CPU with a local embedding model.
 
 ---
 
@@ -300,6 +478,9 @@ disambiguation and narrative reasoning require broad world-knowledge that only
 frontier models currently provide reliably.
 
 For a medical literature adaptation, the same architectural pattern applies —
-keep the JSONL-based, stage-by-stage design and the local/frontier two-tier
-model strategy — but replace the domain-specific prompts, predicate schema,
-and knowledge-base linking targets with their biomedical counterparts.
+keep the stage-by-stage design and the local/frontier two-tier model strategy —
+but replace the domain-specific prompts, predicate schema, and knowledge-base
+linking targets with their biomedical counterparts. The restructured four-stage
+pipeline (vocab pre-pass → single-call extraction → cross-paper dedup →
+bundle build) that emerged from the kgraph/medlit work is a proven starting
+point.
