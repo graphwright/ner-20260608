@@ -30,6 +30,7 @@ import httpx
 
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
 except ImportError:
     pass
@@ -55,11 +56,12 @@ SYSTEM = (
 
 # One paragraph at a time. Keeping the prompt minimal reduces confabulation.
 USER_TMPL = (
-    'Split this paragraph into sentences. '
+    "Split this paragraph into sentences. "
     'For each sentence output exactly: {{"id": N, "para": P, "text": "...verbatim..."}}\n'
-    'id starts at {id_offset}, para is {para_num}.\n\n'
-    '{paragraph}'
+    "id starts at {id_offset}, para is {para_num}.\n\n"
+    "{paragraph}"
 )
+
 
 def resolve_model(model: str, anthropic: bool) -> str:
     if anthropic:
@@ -107,7 +109,9 @@ def anthropic_chat(system: str, user: str, model: str) -> str:
     return resp.json()["content"][0]["text"]
 
 
-def chat(system: str, user: str, model: str, anthropic: bool, base_url: str | None) -> str:
+def chat(
+    system: str, user: str, model: str, anthropic: bool, base_url: str | None
+) -> str:
     if anthropic:
         return anthropic_chat(system, user, model)
     assert base_url is not None
@@ -152,6 +156,7 @@ def extract_paragraphs(text: str) -> list[str]:
 # Parsing
 # ---------------------------------------------------------------------------
 
+
 def parse_response(raw: str, para_num: int) -> list[dict]:
     """
     Extract sentence records from raw LLM output.
@@ -175,7 +180,7 @@ def parse_response(raw: str, para_num: int) -> list[dict]:
             obj = json.loads(line)
         except json.JSONDecodeError:
             # Try to extract a JSON object substring
-            m = re.search(r'\{[^{}]+\}', line)
+            m = re.search(r"\{[^{}]+\}", line)
             if m:
                 try:
                     obj = json.loads(m.group())
@@ -188,7 +193,7 @@ def parse_response(raw: str, para_num: int) -> list[dict]:
             continue
 
         try:
-            obj["id"]   = int(obj["id"])
+            obj["id"] = int(obj["id"])
             obj["para"] = int(obj.get("para", para_num))
             obj["text"] = str(obj["text"]).strip()
         except (KeyError, ValueError) as e:
@@ -205,6 +210,7 @@ def parse_response(raw: str, para_num: int) -> list[dict]:
 # Resume support
 # ---------------------------------------------------------------------------
 
+
 def read_existing_output(path: Path) -> tuple[int, int]:
     """Return (max_sentence_id, max_para_num) from existing JSONL, or (0, 0)."""
     if not path.exists():
@@ -217,9 +223,11 @@ def read_existing_output(path: Path) -> tuple[int, int]:
                 continue
             try:
                 obj = json.loads(line)
-                max_id   = max(max_id,   int(obj.get("id",   0)))
+                max_id = max(max_id, int(obj.get("id", 0)))
                 max_para = max(max_para, int(obj.get("para", 0)))
-            except (json.JSONDecodeError, ValueError):
+            except ValueError:
+                pass
+            except json.JSONDecodeError:
                 pass
     return max_id, max_para
 
@@ -227,6 +235,7 @@ def read_existing_output(path: Path) -> tuple[int, int]:
 # ---------------------------------------------------------------------------
 # Per-paragraph processing
 # ---------------------------------------------------------------------------
+
 
 def process_paragraph(
     paragraph: str,
@@ -259,6 +268,7 @@ def process_paragraph(
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="LLM sentence splitter → JSONL")
     parser.add_argument("--input", required=True)
@@ -266,7 +276,9 @@ def main() -> None:
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--ollama", default=DEFAULT_OLLAMA)
     parser.add_argument("--anthropic", action="store_true")
-    parser.add_argument("--gutenberg", action="store_true", help="Strip Project Gutenberg header/footer")
+    parser.add_argument(
+        "--gutenberg", action="store_true", help="Strip Project Gutenberg header/footer"
+    )
     args = parser.parse_args()
 
     input_path = Path(args.input)
@@ -280,15 +292,18 @@ def main() -> None:
     print(f"Extracted {len(paragraphs)} paragraphs from {input_path.name}")
 
     max_id, max_para = read_existing_output(output_path)
-    start_idx = max_para          # paragraphs already done (para numbers are 1-based)
+    start_idx = max_para  # paragraphs already done (para numbers are 1-based)
     id_cursor = max_id
     if start_idx:
         print(f"Resuming after para {max_para}, sentence id {max_id}")
 
     with output_path.open("a", encoding="utf-8") as out_fh:
         for i, para in enumerate(paragraphs[start_idx:], start=start_idx + 1):
-            print(f"  para {i:>3}/{len(paragraphs)}  sid={id_cursor+1:>4} ...",
-                  end=" ", flush=True)
+            print(
+                f"  para {i:>3}/{len(paragraphs)}  sid={id_cursor + 1:>4} ...",
+                end=" ",
+                flush=True,
+            )
 
             records = process_paragraph(
                 paragraph=para,

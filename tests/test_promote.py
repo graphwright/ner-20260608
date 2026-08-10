@@ -1,9 +1,16 @@
 """Tests for promote.py — truth_status promotion pass."""
 
 import json
-import pytest
+from pathlib import Path
 
-from promote import promote_record, promote_records, DEFAULT_ASSERT_THRESHOLD, DEFAULT_DISPUTE_THRESHOLD
+from promote import (
+    DEFAULT_ASSERT_THRESHOLD,
+    DEFAULT_DISPUTE_THRESHOLD,
+    promote_record,
+    promote_records,
+)
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _rec(conf: float, status: str = "hypothetical") -> dict:
@@ -12,7 +19,9 @@ def _rec(conf: float, status: str = "hypothetical") -> dict:
 
 class TestPromoteRecord:
     def test_high_confidence_promotes_to_asserted_true(self):
-        r = promote_record(_rec(1.0), DEFAULT_ASSERT_THRESHOLD, DEFAULT_DISPUTE_THRESHOLD)
+        r = promote_record(
+            _rec(1.0), DEFAULT_ASSERT_THRESHOLD, DEFAULT_DISPUTE_THRESHOLD
+        )
         assert r["truth_status"] == "asserted_true"
 
     def test_at_assert_threshold_promotes(self):
@@ -20,7 +29,9 @@ class TestPromoteRecord:
         assert r["truth_status"] == "asserted_true"
 
     def test_mid_confidence_promotes_to_disputed(self):
-        r = promote_record(_rec(0.8), DEFAULT_ASSERT_THRESHOLD, DEFAULT_DISPUTE_THRESHOLD)
+        r = promote_record(
+            _rec(0.8), DEFAULT_ASSERT_THRESHOLD, DEFAULT_DISPUTE_THRESHOLD
+        )
         assert r["truth_status"] == "disputed"
 
     def test_at_dispute_threshold_promotes_to_disputed(self):
@@ -28,16 +39,25 @@ class TestPromoteRecord:
         assert r["truth_status"] == "disputed"
 
     def test_low_confidence_stays_hypothetical(self):
-        r = promote_record(_rec(0.5), DEFAULT_ASSERT_THRESHOLD, DEFAULT_DISPUTE_THRESHOLD)
+        r = promote_record(
+            _rec(0.5), DEFAULT_ASSERT_THRESHOLD, DEFAULT_DISPUTE_THRESHOLD
+        )
         assert r["truth_status"] == "hypothetical"
 
     def test_zero_confidence_stays_hypothetical(self):
-        r = promote_record(_rec(0.0), DEFAULT_ASSERT_THRESHOLD, DEFAULT_DISPUTE_THRESHOLD)
+        r = promote_record(
+            _rec(0.0), DEFAULT_ASSERT_THRESHOLD, DEFAULT_DISPUTE_THRESHOLD
+        )
         assert r["truth_status"] == "hypothetical"
 
     def test_other_fields_preserved(self):
-        rec = {"id": "stmt:x", "extraction_confidence": 0.95, "truth_status": "hypothetical",
-               "predicate": "Knows", "subject_id": "wiki:Holmes"}
+        rec = {
+            "id": "stmt:x",
+            "extraction_confidence": 0.95,
+            "truth_status": "hypothetical",
+            "predicate": "Knows",
+            "subject_id": "wiki:Holmes",
+        }
         r = promote_record(rec, 0.9, 0.7)
         assert r["predicate"] == "Knows"
         assert r["subject_id"] == "wiki:Holmes"
@@ -70,9 +90,9 @@ class TestPromoteRecords:
         records = [_rec(1.0), _rec(0.95), _rec(0.8), _rec(0.7), _rec(0.5), _rec(0.4)]
         result = promote_records(records, assert_threshold=0.9, dispute_threshold=0.7)
         statuses = [r["truth_status"] for r in result]
-        assert statuses.count("asserted_true") == 2   # 1.0, 0.95
-        assert statuses.count("disputed") == 2        # 0.8, 0.7
-        assert statuses.count("hypothetical") == 2    # 0.5, 0.4
+        assert statuses.count("asserted_true") == 2  # 1.0, 0.95
+        assert statuses.count("disputed") == 2  # 0.8, 0.7
+        assert statuses.count("hypothetical") == 2  # 0.5, 0.4
 
     def test_order_preserved(self):
         records = [_rec(float(i) / 10) for i in range(10)]
@@ -83,7 +103,9 @@ class TestPromoteRecords:
 
 class TestPromoteCLI:
     def test_roundtrip(self, tmp_path):
-        import subprocess, sys
+        import subprocess
+        import sys
+
         input_file = tmp_path / "triplets.jsonl"
         output_file = tmp_path / "promoted.jsonl"
         records = [_rec(1.0), _rec(0.8), _rec(0.5)]
@@ -92,11 +114,18 @@ class TestPromoteCLI:
                 fh.write(json.dumps(r) + "\n")
 
         result = subprocess.run(
-            [sys.executable, "src/promote.py",
-             "--input", str(input_file),
-             "--output", str(output_file)],
-            capture_output=True, text=True,
-            cwd="/Users/wware/tmp/ner-20260608",
+            [
+                sys.executable,
+                "src/promote.py",
+                "--input",
+                str(input_file),
+                "--output",
+                str(output_file),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=REPO_ROOT,
         )
         assert result.returncode == 0
         with output_file.open() as fh:
@@ -106,15 +135,25 @@ class TestPromoteCLI:
         assert out[2]["truth_status"] == "hypothetical"
 
     def test_invalid_thresholds_exit_nonzero(self, tmp_path):
-        import subprocess, sys
+        import subprocess
+        import sys
+
         input_file = tmp_path / "triplets.jsonl"
         input_file.write_text("")
         result = subprocess.run(
-            [sys.executable, "src/promote.py",
-             "--input", str(input_file),
-             "--assert-threshold", "0.5",
-             "--dispute-threshold", "0.8"],
-            capture_output=True, text=True,
-            cwd="/Users/wware/tmp/ner-20260608",
+            [
+                sys.executable,
+                "src/promote.py",
+                "--input",
+                str(input_file),
+                "--assert-threshold",
+                "0.5",
+                "--dispute-threshold",
+                "0.8",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=REPO_ROOT,
         )
         assert result.returncode != 0

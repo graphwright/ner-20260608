@@ -24,15 +24,15 @@ pip install ner_20260608
 ```python
 from ner_20260608 import load_bohemia_graph
 
-g = load_bohemia_graph()          # loads bundled JSONL, ~100 ms
+g = load_bohemia_graph()  # loads bundled JSONL, ~100 ms
 
 # Direct lookup — wiki: prefix or full URL both work
 holmes = g.get("wiki:Sherlock_Holmes")
-print(holmes)                     # Sherlock Holmes   (str uses display_name)
-print(repr(holmes))               # Person('wiki:Sherlock_Holmes')  (repr shows id)
+print(holmes)  # Sherlock Holmes   (str uses display_name)
+print(repr(holmes))  # Person('wiki:Sherlock_Holmes')  (repr shows id)
 
 # describe() delegates to str()
-print(g.describe("wiki:Irene_Adler"))   # Irene Adler
+print(g.describe("wiki:Irene_Adler"))  # Irene Adler
 
 # Who does Watson know (asserted true)?
 edges = g.edges_from("wiki:John_Watson", truth="asserted_true")
@@ -98,14 +98,12 @@ Irene to the photograph:
 ```python
 photo_events = [
     e.subject
-    for e in pre.edges_to(
-        "wiki:Irene_Adler", pred_type=Involves, truth="asserted_true"
-    )
+    for e in pre.edges_to("wiki:Irene_Adler", pred_type=Involves, truth="asserted_true")
     if "photograph" in e.subject.description.lower()
 ]
 for ev in photo_events:
-    print(repr(ev))        # Event('sib:event:joint_photograph_revealed')
-    print(" ", ev)         # The King reveals that he and Irene Adler were both...
+    print(repr(ev))  # Event('sib:event:joint_photograph_revealed')
+    print(" ", ev)  # The King reveals that he and Irene Adler were both...
     print(" ", ev.description)
 ```
 
@@ -242,13 +240,13 @@ graph in `scandal_instances.py` has the full geographic chain. Use
 
 ```python
 import sys, importlib
-import scandal_instances as si   # repo only — not in wheel; see note above
+import scandal_instances as si  # repo only — not in wheel; see note above
 from ner_20260608.graph import Graph
 from ner_20260608.holmes_schema import LocatedIn
 
 g_manual = Graph.from_module(si)
 reachable = g_manual.transitive_closure("wiki:221B_Baker_Street", LocatedIn)
-print(reachable)   # {'wiki:London'}
+print(reachable)  # {'wiki:London'}
 # (Briony Lodge in St. John's Wood, which is in London, is reachable via
 #  a two-hop chain — transitive_closure follows it automatically.)
 ```
@@ -277,7 +275,8 @@ for eid, inst in g.by_id.items():
 from ner_20260608.holmes_schema import KnewAt
 
 knew_edges = [
-    inst for inst in g.by_id.values()
+    inst
+    for inst in g.by_id.values()
     if isinstance(inst, KnewAt)
     and inst.subject.id == "wiki:John_Watson"
     and inst.truth_status == TruthStatus.ASSERTED_TRUE
@@ -296,7 +295,9 @@ from ner_20260608.holmes_schema import DisguisedAs, HasTrueIdentity
 
 for inst in g.by_id.values():
     if isinstance(inst, DisguisedAs):
-        print(f"{inst.subject}  disguised as  {inst.object_}  [{inst.truth_status.value}]")
+        print(
+            f"{inst.subject}  disguised as  {inst.object_}  [{inst.truth_status.value}]"
+        )
         # → Sherlock Holmes  disguised as  Nonconformist Clergyman  [asserted_true]
 ```
 
@@ -305,6 +306,7 @@ for inst in g.by_id.values():
 ```python
 import json
 from ner_20260608.holmes_schema import BaseStatement
+
 
 def subgraph_json(g, seed_ids, max_hops=2):
     layers = g.bfs(seed_ids, max_hops=max_hops)
@@ -315,20 +317,25 @@ def subgraph_json(g, seed_ids, max_hops=2):
         if inst is None:
             continue
         if isinstance(inst, BaseStatement):
-            edges.append({
-                "id": inst.id,
-                "type": type(inst).__name__,
-                "subject": inst.subject.id,
-                "object": inst.object_.id,
-                "truth_status": inst.truth_status.value,
-            })
+            edges.append(
+                {
+                    "id": inst.id,
+                    "type": type(inst).__name__,
+                    "subject": inst.subject.id,
+                    "object": inst.object_.id,
+                    "truth_status": inst.truth_status.value,
+                }
+            )
         else:
-            nodes.append({
-                "id": inst.id,
-                "type": type(inst).__name__,
-                "label": str(inst),
-            })
+            nodes.append(
+                {
+                    "id": inst.id,
+                    "type": type(inst).__name__,
+                    "label": str(inst),
+                }
+            )
     return json.dumps({"nodes": nodes, "edges": edges}, indent=2)
+
 
 print(subgraph_json(g, ["wiki:Irene_Adler"]))
 ```
@@ -400,7 +407,11 @@ so they never fail because an extraction changed.
 import pytest
 from ner_20260608.graph import Graph
 from ner_20260608.holmes_schema import (
-    Person, Location, Knows, AssociatedWith, TruthStatus,
+    Person,
+    Location,
+    Knows,
+    AssociatedWith,
+    TruthStatus,
 )
 
 _PROV = dict(
@@ -416,14 +427,20 @@ def trio():
     """Holmes knows Watson (true) and Irene (false)."""
     holmes = Person(id="wiki:Sherlock_Holmes", display_name="Sherlock Holmes")
     watson = Person(id="wiki:John_Watson", display_name="John Watson")
-    irene  = Person(id="wiki:Irene_Adler",  display_name="Irene Adler")
+    irene = Person(id="wiki:Irene_Adler", display_name="Irene Adler")
     k_hw = Knows(
-        id="stmt:hw", subject=holmes, object_=watson,
-        truth_status=TruthStatus.ASSERTED_TRUE, **_PROV,
+        id="stmt:hw",
+        subject=holmes,
+        object_=watson,
+        truth_status=TruthStatus.ASSERTED_TRUE,
+        **_PROV,
     )
     k_hi = Knows(
-        id="stmt:hi", subject=holmes, object_=irene,
-        truth_status=TruthStatus.ASSERTED_FALSE, **_PROV,
+        id="stmt:hi",
+        subject=holmes,
+        object_=irene,
+        truth_status=TruthStatus.ASSERTED_FALSE,
+        **_PROV,
     )
     return Graph([holmes, watson, irene, k_hw, k_hi])
 
@@ -447,11 +464,15 @@ def test_bfs_skips_false_edges_by_default(trio):
 import pytest
 from ner_20260608.holmes_schema import TruthStatus
 
-@pytest.mark.parametrize("ts,expected_count", [
-    ("asserted_true",  1),
-    ("asserted_false", 1),
-    ("hypothetical",   0),
-])
+
+@pytest.mark.parametrize(
+    "ts,expected_count",
+    [
+        ("asserted_true", 1),
+        ("asserted_false", 1),
+        ("hypothetical", 0),
+    ],
+)
 def test_truth_filter_parametrized(trio, ts, expected_count):
     edges = trio.edges_from("wiki:Sherlock_Holmes", truth=ts)
     assert len(edges) == expected_count
@@ -498,7 +519,7 @@ from ner_20260608 import load_bohemia_graph
 from ner_20260608.holmes_schema import BaseStatement
 
 mcp = FastMCP("bohemia-graph")
-_g = None   # lazy singleton
+_g = None  # lazy singleton
 
 
 def _graph():
@@ -613,12 +634,16 @@ from ner_20260608.graph import Graph
 from ner_20260608.holmes_schema import Person, Knows, TruthStatus
 
 a = Person(id="p:alice", display_name="Alice")
-b = Person(id="p:bob",   display_name="Bob")
+b = Person(id="p:bob", display_name="Bob")
 knows = Knows(
-    id="stmt:ab", subject=a, object_=b,
+    id="stmt:ab",
+    subject=a,
+    object_=b,
     truth_status=TruthStatus.ASSERTED_TRUE,
-    story_id="demo", paragraph_index=0,
-    extraction_method="manual", extraction_confidence=1.0,
+    story_id="demo",
+    paragraph_index=0,
+    extraction_method="manual",
+    extraction_confidence=1.0,
 )
 g = Graph([a, b, knows])
 ```
@@ -632,6 +657,7 @@ Add the class to `holmes_schema.py`:
 ```python
 class Employs(BaseStatement, ProvenanceMixin):
     """Person employs another Person (e.g. Holmes employs the Baker Street Irregulars)."""
+
     subject: Person
     object_: Person
 ```
@@ -663,6 +689,7 @@ Add this to `src/ner_20260608/__main__.py` so the package can be invoked as
 import sys
 from ner_20260608 import load_bohemia_graph
 
+
 def main():
     g = load_bohemia_graph(warn=False)
     cmd = sys.argv[1] if len(sys.argv) > 1 else "help"
@@ -682,6 +709,7 @@ def main():
 
     else:
         print("usage: python -m ner_20260608 describe|edges-from|bfs <entity_id>...")
+
 
 if __name__ == "__main__":
     main()

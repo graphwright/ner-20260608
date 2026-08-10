@@ -4,226 +4,146 @@ This file mirrors the repo's schema module but lives inside the real import
 package so installed users can rely on package-relative imports.
 """
 
-import sys
-from typing import ClassVar, ForwardRef, Generic, Literal, TypeVar, get_args, get_origin
-from enum import Enum
-from pydantic import BaseModel, Field, ConfigDict
+from __future__ import annotations
+
+from typing import ClassVar, TypeVar
+
+from pydantic import BaseModel, ConfigDict
+
+from base import (
+    AnyStatement,
+    AnyStmt,
+    BaseStatement,
+    EntityInstance,
+    Symmetric,
+    Transitive,
+)
 
 
-class TruthStatus(str, Enum):
-    ASSERTED_TRUE = "asserted_true"
-    ASSERTED_FALSE = "asserted_false"
-    HYPOTHETICAL = "hypothetical"
-    DISPUTED = "disputed"
-    RETRACTED = "retracted"
+class SherlockEntity(EntityInstance):
+    """Base entity with optional source metadata from the JSONL catalog."""
 
-
-class Trait:
-    """Marker base for all semantic traits."""
-
-
-class Transitive(Trait): ...
-class Symmetric(Trait): ...
-class Functional(Trait): ...
-class InverseFunctional(Trait): ...
-
-P = TypeVar('P', bound='BaseStatement')
-
-
-class Inverse(Trait, Generic[P]):
-    """This predicate is the inverse of P."""
-
-
-def get_inverse(cls: type['BaseStatement']) -> type['BaseStatement'] | None:
-    module = sys.modules[cls.__module__].__dict__
-    for base in getattr(cls, '__orig_bases__', []):
-        if get_origin(base) is Inverse:
-            args = get_args(base)
-            if args:
-                arg = args[0]
-                if isinstance(arg, str):
-                    return module.get(arg)
-                if isinstance(arg, ForwardRef):
-                    return module.get(arg.__forward_arg__)
-                return arg
-    return None
-
-
-class EntityInstance(BaseModel):
-    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
-    id: str
-
-    def __repr__(self) -> str:
-        return f"{type(self).__name__}({self.id!r})"
+    canonical: str
+    aliases: tuple[str, ...] = ()
+    wiki_url: str | None = None
+    raw_type: str | None = None
 
     def __str__(self) -> str:
-        return self.id
+        return self.canonical
 
 
-def statement_id(subject_id: str, predicate_name: str, object_id: str) -> str:
-    """Content-addressed id for a predicate instance.
-
-    The predicate name and participant ids are embedded for traceability and
-    idempotent construction — not for type dispatch. This is distinct from the
-    discouraged synthetic-entity pattern (sib:event:kings_visit): here the
-    human-readable components serve a functional purpose (deduplication, readable
-    debugging) and nothing in the system parses the string to recover a type.
-    """
-    return f"stmt:{subject_id}:{predicate_name}:{object_id}"
+class Person(SherlockEntity):
+    """A person in the story world."""
 
 
-class BaseStatement(EntityInstance):
-    truth_status: TruthStatus = TruthStatus.HYPOTHETICAL
-
-    def __str__(self) -> str:
-        subj = getattr(self, 'subject', None)
-        obj = getattr(self, 'object_', None)
-        cls = type(self).__name__
-        if subj is not None and obj is not None:
-            return f"{cls}({subj} → {obj})"
-        return cls
+class Organization(SherlockEntity):
+    """An organization in the story world."""
 
 
-class Person(EntityInstance):
-    display_name: str
-
-    def __str__(self) -> str:
-        return self.display_name
+class Location(SherlockEntity):
+    """A place/location in the story world."""
 
 
-class Persona(EntityInstance):
-    display_name: str
-
-    def __str__(self) -> str:
-        return self.display_name
+class Object(SherlockEntity):
+    """A tangible or conceptual object in the story world."""
 
 
-class Location(EntityInstance):
-    display_name: str
-
-    def __str__(self) -> str:
-        return self.display_name
+class Event(SherlockEntity):
+    """An event node imported from event extraction."""
 
 
-class Object(EntityInstance):
-    display_name: str
-
-    def __str__(self) -> str:
-        return self.display_name
+class Moment(SherlockEntity):
+    """A time/moment node imported from timeline extraction."""
 
 
-class Document(EntityInstance):
-    display_name: str
-    story_id: str
-    document_type: Literal["letter", "photograph", "telegram", "newspaper", "other"]
-
-    def __str__(self) -> str:
-        return self.display_name
+class OtherEntity(SherlockEntity):
+    """Fallback entity type when the source type is unknown."""
 
 
-class Event(EntityInstance):
-    story_id: str
-    description: str
-
-    def __str__(self) -> str:
-        return self.description
+SubjectT = TypeVar("SubjectT", bound=SherlockEntity)
+ObjectT = TypeVar("ObjectT", bound=SherlockEntity)
 
 
-class Moment(EntityInstance):
-    story_id: str
-    label: str
-    narrator: Person | None = None
+class StoryMetadata(BaseModel):
+    """Story-extraction metadata shared by extracted (not inferred) predicates."""
 
-    def __str__(self) -> str:
-        return self.label
-
-
-class Plan(EntityInstance):
-    provisional: ClassVar[bool] = True
-    story_id: str
-    description: str
-    goal: str | None = None
-
-    def __str__(self) -> str:
-        return self.description
-
-
-class ProvenanceMixin(BaseModel):
-    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
-    story_id: str
-    paragraph_index: int
-    asserting_narrator: Person | None = None
-    extraction_method: str
-    extraction_confidence: float = Field(ge=0.0, le=1.0)
-
-
-class EpistemicMixin(BaseModel):
     model_config = ConfigDict(frozen=True)
-    narrator_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+
+    story_id: str
+    paragraph_index: int | None = None
+    sentence_ids: tuple[int, ...] = ()
+    asserting_narrator_id: str | None = None
+    extraction_confidence: float | None = None
+    narrator_confidence: float | None = None
+    raw_extraction_method: str | None = None
 
 
-class AssociatedWith(BaseStatement, ProvenanceMixin):
-    subject: Person
-    object_: Location
+class StoryStatement[SubjectT: SherlockEntity, ObjectT: SherlockEntity](
+    BaseStatement[SubjectT, ObjectT], StoryMetadata
+):
+    """Statement enriched with story-extraction metadata from triplet rows."""
+
+    def __str__(self) -> str:
+        return f"{type(self).__name__}({self.subject} -> {self.object_})"
 
 
-class Knows(BaseStatement, ProvenanceMixin, EpistemicMixin, Symmetric):
-    subject: Person
-    object_: Person
+class Involves(StoryStatement[Event, Person]):
+    """An event involves a person."""
 
 
-class LocatedIn(BaseStatement, ProvenanceMixin, Transitive):
-    subject: Location
-    object_: Location
+class OccurredAt(StoryStatement[Event, Moment]):
+    """An event occurred at a specific moment."""
 
 
-class Involves(BaseStatement, ProvenanceMixin):
-    subject: Event
-    object_: Person | Persona
+class Possesses(StoryStatement[Person, Object]):
+    """A person possesses an object."""
 
 
-class OccurredAt(BaseStatement, ProvenanceMixin):
-    subject: Event
-    object_: Moment
+class AssociatedWith(StoryStatement[Person, Location]):
+    """A person is associated with a location."""
 
 
-class KnewAt(BaseStatement, ProvenanceMixin, EpistemicMixin):
-    subject: Person
-    object_: BaseStatement
+class Knows(StoryStatement[Person, Person], Symmetric):
+    """A social knowledge relation between two people."""
+
+
+class LocatedIn(StoryStatement[Location, Location], Transitive):
+    """A transitive containment/location relation."""
+
+
+class HappenedIn(StoryStatement[Event, Location]):
+    """An event took place in a location.
+
+    This captures event->place structure that is often only implicit in event
+    identifiers/descriptions from extraction output.
+    """
+
+
+class KnewAt(BaseStatement[Person, AnyStmt], StoryMetadata):
+    """A person's epistemic state toward some statement, as of a moment."""
+
+    object_: AnyStatement
     moment: Moment
 
 
-class DisguisedAs(BaseStatement, ProvenanceMixin, EpistemicMixin, Inverse['HasTrueIdentity']):
-    subject: Person
-    object_: Persona
+class Contradicts(BaseStatement[AnyStatement, AnyStatement], StoryMetadata, Symmetric):
+    """One statement contradicts another."""
 
-
-class HasTrueIdentity(BaseStatement, ProvenanceMixin, EpistemicMixin, Functional, Inverse[DisguisedAs]):
-    subject: Persona
-    object_: Person
-
-
-class Possesses(BaseStatement, ProvenanceMixin, EpistemicMixin):
-    subject: Person
-    object_: Object | Document
-
-
-class Contradicts(BaseStatement, ProvenanceMixin, Symmetric):
+    subject: AnyStatement
+    object_: AnyStatement
     provisional: ClassVar[bool] = True
-    subject: BaseStatement
-    object_: BaseStatement
 
 
-class Executes(BaseStatement, ProvenanceMixin):
-    provisional: ClassVar[bool] = True
-    subject: Person
-    object_: Plan
+class PhysicallyIn(BaseStatement[Object, Location]):
+    """An object is physically located in a place.
 
-
-for _cls in [
-    Person, Persona, Location, Object, Document,
-    Event, Moment, Plan,
-    AssociatedWith, Knows, LocatedIn, Involves, OccurredAt,
-    KnewAt, DisguisedAs, HasTrueIdentity, Possesses, Contradicts, Executes,
-]:
-    _cls.model_rebuild()
+    This is a *derivable* predicate, not an extracted one: it is produced by
+    inference (e.g. the mystery Horn clause), never imported from a triplet row.
+    It therefore subclasses ``BaseStatement`` directly rather than
+    ``StoryStatement`` -- an inferred fact has no story-extraction metadata
+    (no ``story_id``, paragraph index, or extraction confidence), and requiring
+    those fields would make it impossible for the datalog engine to construct a
+    derived head. Keeping extracted and inferred predicates on separate branches
+    of the hierarchy is the honest ontology: provenance-of-extraction belongs
+    only to things that were extracted.
+    """

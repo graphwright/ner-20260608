@@ -12,29 +12,45 @@ import json
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import get_type_hints
+from typing import TYPE_CHECKING, Any, cast, get_origin, get_type_hints
+
+from pydantic import ValidationError
+
+from base import BaseStatement, Instance
 
 from . import holmes_schema as _schema
 from .holmes_schema import (
-    BaseStatement,
-    EntityInstance,
     Event,
     Location,
     Moment,
     Object,
+    Organization,
+    OtherEntity,
     Person,
-    TruthStatus,
+    SherlockEntity,
 )
 
-_NER_TYPE_TO_CLASS: dict[str, type[EntityInstance]] = {
+if TYPE_CHECKING:
+    from .graph import Graph
+
+_NER_TYPE_TO_CLASS: dict[str, type[SherlockEntity]] = {
     "person": Person,
+    "organization": Organization,
     "place": Location,
     "object": Object,
-    "other": Object,   # deliberate catch-all for uncategorised pipeline entities
+    "other": OtherEntity,
+}
+
+_VALID_TRUTH_STATUS: set[str] = {
+    "asserted_true",
+    "asserted_false",
+    "hypothetical",
+    "disputed",
+    "retracted",
 }
 
 
-def _entity_class(ner_type: str) -> type[EntityInstance] | None:
+def _entity_class(ner_type: str) -> type[SherlockEntity] | None:
     """Return the EntityInstance subclass for a NER type string, or None if unmapped.
 
     Callers must warn and skip on None — do not silently coerce unmapped types to
@@ -43,7 +59,7 @@ def _entity_class(ner_type: str) -> type[EntityInstance] | None:
     return _NER_TYPE_TO_CLASS.get(ner_type.lower())
 
 
-_PREDICATE_CLASSES: dict[str, type[BaseStatement]] = {
+_PREDICATE_CLASSES: dict[str, type[BaseStatement[Any, Any]]] = {
     name: obj
     for name, obj in vars(_schema).items()
     if isinstance(obj, type)
@@ -52,11 +68,11 @@ _PREDICATE_CLASSES: dict[str, type[BaseStatement]] = {
 }
 
 
-def _predicate_class(name: str) -> type[BaseStatement] | None:
+def _predicate_class(name: str) -> type[BaseStatement[Any, Any]] | None:
     return _PREDICATE_CLASSES.get(name)
 
 
-def _is_higher_order(pred_cls: type[BaseStatement]) -> bool:
+def _is_higher_order(pred_cls: type[BaseStatement[Any, Any]]) -> bool:
     """Return True if subject or object_ is annotated as BaseStatement.
 
     Uses get_type_hints() rather than __annotations__ so inherited field
@@ -64,19 +80,23 @@ def _is_higher_order(pred_cls: type[BaseStatement]) -> bool:
     """
     try:
         hints = get_type_hints(pred_cls)
-    except Exception:
+    except ValidationError:
         hints = pred_cls.__annotations__
     for fname in ("subject", "object_"):
         ann = hints.get(fname)
-        if ann is BaseStatement or ann is _schema.BaseStatement:
+        if ann is BaseStatement:
+            return True
+        if isinstance(ann, type) and issubclass(ann, BaseStatement):
+            return True
+        if get_origin(ann) is BaseStatement:
             return True
         if isinstance(ann, str) and ann == "BaseStatement":
             return True
     return False
 
 
-def _load_jsonl(path: Path) -> list[dict]:
-    records = []
+def _load_jsonl(path: Path) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     with path.open(encoding="utf-8") as fh:
         for line in fh:
             line = line.strip()
@@ -89,23 +109,23 @@ def _load_jsonl(path: Path) -> list[dict]:
 class InstanceSet:
     """All hydrated instances keyed by id."""
 
-    by_id: dict[str, EntityInstance] = field(default_factory=dict)
-    by_url: dict[str, EntityInstance] = field(default_factory=dict)
+    by_id: dict[str, Instance] = field(default_factory=dict)
+    by_url: dict[str, Instance] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
 
-    def add(self, inst: EntityInstance, wiki_url: str | None = None) -> None:
+    def add(self, inst: Instance, wiki_url: str | None = None) -> None:
         self.by_id[inst.id] = inst
         if wiki_url:
             self.by_url[wiki_url] = inst
 
-    def get(self, entity_id: str) -> EntityInstance | None:
+    def get(self, entity_id: str) -> Instance | None:
         result = self.by_id.get(entity_id)
         if result is None:
             result = self.by_url.get(entity_id)
         return result
 
 
-def _hydrate_entities(records: list[dict], iset: InstanceSet) -> None:
+def _hydrate_entities(records: list[dict[str, Any]], iset: InstanceSet) -> None:
     # entity_id and the wiki: / place: prefix come from the upstream extraction
     # pipeline; this loader does not canonicalize or validate them.
     for rec in records:
@@ -124,15 +144,18 @@ def _hydrate_entities(records: list[dict], iset: InstanceSet) -> None:
         try:
             inst = cls(
                 id=entity_id,
-                display_name=rec.get("canonical", entity_id),
+                canonical=rec.get("canonical", entity_id),
+                aliases=tuple(rec.get("aliases", ())),
+                wiki_url=rec.get("wiki_url"),
+                raw_type=rec.get("type"),
             )
-        except Exception as exc:
+        except ValidationError as exc:
             iset.warnings.append(f"entity {entity_id!r} failed: {exc}")
             continue
         iset.add(inst, wiki_url=rec.get("wiki_url"))
 
 
-def _hydrate_events(records: list[dict], iset: InstanceSet) -> None:
+def _hydrate_events(records: list[dict[str, Any]], iset: InstanceSet) -> None:
     for rec in records:
         event_id = rec.get("id")
         if not event_id:
@@ -141,39 +164,30 @@ def _hydrate_events(records: list[dict], iset: InstanceSet) -> None:
         try:
             inst = Event(
                 id=event_id,
-                story_id=rec.get("story_id", "unknown"),
-                description=rec.get("description", ""),
+                canonical=rec.get("description", event_id),
+                aliases=(),
+                raw_type="event",
             )
-        except Exception as exc:
+        except ValidationError as exc:
             iset.warnings.append(f"event {event_id!r} failed: {exc}")
             continue
         iset.add(inst)
 
 
-def _hydrate_moments(records: list[dict], iset: InstanceSet) -> None:
+def _hydrate_moments(records: list[dict[str, Any]], iset: InstanceSet) -> None:
     for rec in records:
         moment_id = rec.get("id")
         if not moment_id:
             iset.warnings.append(f"moment record missing id: {rec!r:.120}")
             continue
-        narrator_id = rec.get("narrator_id")
-        narrator: Person | None = None
-        if narrator_id:
-            narr = iset.get(narrator_id)
-            if isinstance(narr, Person):
-                narrator = narr
-            else:
-                iset.warnings.append(
-                    f"moment {moment_id!r}: narrator_id {narrator_id!r} not found or not a Person"
-                )
         try:
             inst = Moment(
                 id=moment_id,
-                story_id=rec.get("story_id", "unknown"),
-                label=rec.get("label", moment_id),
-                narrator=narrator,
+                canonical=rec.get("label", moment_id),
+                aliases=(),
+                raw_type="moment",
             )
-        except Exception as exc:
+        except ValidationError as exc:
             iset.warnings.append(f"moment {moment_id!r} failed: {exc}")
             continue
         iset.add(inst)
@@ -185,44 +199,42 @@ def _truth_status(
     # in tests; the real loader path always supplies both via _build_predicate_kwargs.
     warnings_list: list[str] | None = None,
     triplet_id: str = "?",
-) -> TruthStatus:
+) -> str:
     if raw is None:
-        return TruthStatus.HYPOTHETICAL
-    try:
-        return TruthStatus(raw)
-    except ValueError:
+        return "hypothetical"
+    if raw not in _VALID_TRUTH_STATUS:
         if warnings_list is not None:
             warnings_list.append(
                 f"triplet {triplet_id!r}: unrecognised truth_status {raw!r} — "
                 "defaulting to HYPOTHETICAL; this triplet will be invisible to "
                 "asserted-graph traversals (bfs, transitive_closure, MCP tools)"
             )
-        return TruthStatus.HYPOTHETICAL
+        return "hypothetical"
+    return raw
 
 
-def _build_predicate_kwargs(rec: dict, subject: EntityInstance, object_: EntityInstance, iset: InstanceSet) -> dict:
-    narrator_id = rec.get("asserting_narrator_id")
-    narrator: Person | None = None
-    if narrator_id:
-        narr = iset.get(narrator_id)
-        if isinstance(narr, Person):
-            narrator = narr
-
-    kwargs: dict = dict(
-        id=rec["id"],
-        truth_status=_truth_status(
+def _build_predicate_kwargs(
+    rec: dict[str, Any],
+    subject: Instance,
+    object_: Instance,
+    iset: InstanceSet,
+) -> dict[str, object]:
+    kwargs: dict[str, object] = {
+        "id": rec["id"],
+        "truth_status": _truth_status(
             rec.get("truth_status"),
             warnings_list=iset.warnings,
             triplet_id=rec.get("id", "?"),
         ),
-        subject=subject,
-        object_=object_,
-    )
+        "subject": subject,
+        "object_": object_,
+    }
     if "extraction_method" in rec:
         kwargs["story_id"] = rec.get("story_id", "unknown")
-        kwargs["paragraph_index"] = int(rec.get("paragraph_index", 0))
-        kwargs["asserting_narrator"] = narrator
-        kwargs["extraction_method"] = rec["extraction_method"]
+        kwargs["paragraph_index"] = rec.get("paragraph_index")
+        kwargs["sentence_ids"] = tuple(rec.get("sentence_ids", ()))
+        kwargs["asserting_narrator_id"] = rec.get("asserting_narrator_id")
+        kwargs["raw_extraction_method"] = rec["extraction_method"]
         kwargs["extraction_confidence"] = float(rec.get("extraction_confidence", 1.0))
     nc = rec.get("narrator_confidence")
     if nc is not None:
@@ -238,14 +250,16 @@ def _build_predicate_kwargs(rec: dict, subject: EntityInstance, object_: EntityI
     return kwargs
 
 
-def _hydrate_triplets(records: list[dict], iset: InstanceSet) -> None:
-    deferred: list[dict] = []
+def _hydrate_triplets(records: list[dict[str, Any]], iset: InstanceSet) -> None:
+    deferred: list[dict[str, Any]] = []
 
     for rec in records:
         pred_name = rec.get("predicate", "")
         pred_cls = _predicate_class(pred_name)
         if pred_cls is None:
-            iset.warnings.append(f"unknown predicate {pred_name!r} in {rec.get('id')!r}")
+            iset.warnings.append(
+                f"unknown predicate {pred_name!r} in {rec.get('id')!r}"
+            )
             continue
         if _is_higher_order(pred_cls):
             deferred.append(rec)
@@ -287,7 +301,9 @@ def _hydrate_triplets(records: list[dict], iset: InstanceSet) -> None:
         deferred = remaining
 
 
-def _hydrate_one_triplet(rec: dict, pred_cls: type[BaseStatement], iset: InstanceSet) -> None:
+def _hydrate_one_triplet(
+    rec: dict[str, Any], pred_cls: type[BaseStatement[Any, Any]], iset: InstanceSet
+) -> None:
     trip_id = rec.get("id", "?")
     subject_id = rec.get("subject_id")
     object_id = rec.get("object_id")
@@ -296,17 +312,21 @@ def _hydrate_one_triplet(rec: dict, pred_cls: type[BaseStatement], iset: Instanc
     object_ = iset.get(object_id) if object_id else None
 
     if subject is None:
-        iset.warnings.append(f"triplet {trip_id!r}: subject_id {subject_id!r} not found — skipping")
+        iset.warnings.append(
+            f"triplet {trip_id!r}: subject_id {subject_id!r} not found — skipping"
+        )
         return
     if object_ is None:
-        iset.warnings.append(f"triplet {trip_id!r}: object_id {object_id!r} not found — skipping")
+        iset.warnings.append(
+            f"triplet {trip_id!r}: object_id {object_id!r} not found — skipping"
+        )
         return
 
     kwargs = _build_predicate_kwargs(rec, subject, object_, iset)
     try:
-        inst = pred_cls(**kwargs)
+        inst = pred_cls(**cast(dict[str, Any], kwargs))
         iset.add(inst)
-    except Exception as exc:
+    except ValidationError as exc:
         iset.warnings.append(f"triplet {trip_id!r} ({pred_cls.__name__}) failed: {exc}")
 
 
@@ -335,7 +355,8 @@ def load_instances(
         raw = _load_jsonl(triplets)
         if sentence_cutoff is not None:
             raw = [
-                r for r in raw
+                r
+                for r in raw
                 if not r.get("sentence_ids") or max(r["sentence_ids"]) < sentence_cutoff
             ]
         _hydrate_triplets(raw, iset)
@@ -355,13 +376,14 @@ def load_graph(
     *,
     warn: bool = True,
     sentence_cutoff: int | None = None,
-):
+) -> Graph:
     """Hydrate JSONL files and return a ready-to-use Graph.
 
     sentence_cutoff — see load_instances.
     """
     from .graph import Graph
 
-    iset = load_instances(entities, events, moments, triplets, warn=warn,
-                          sentence_cutoff=sentence_cutoff)
+    iset = load_instances(
+        entities, events, moments, triplets, warn=warn, sentence_cutoff=sentence_cutoff
+    )
     return Graph(iset.by_id.values())

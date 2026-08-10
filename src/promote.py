@@ -33,12 +33,13 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-
 DEFAULT_ASSERT_THRESHOLD = 0.9
 DEFAULT_DISPUTE_THRESHOLD = 0.7
 
 
-def promote_record(record: dict, assert_threshold: float, dispute_threshold: float) -> dict:
+def promote_record(
+    record: dict, assert_threshold: float, dispute_threshold: float
+) -> dict:
     conf = float(record.get("extraction_confidence", 0.0))
     if conf >= assert_threshold:
         new_status = "asserted_true"
@@ -63,16 +64,32 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Promote triplet truth_status by extraction_confidence."
     )
-    parser.add_argument("--input", default="bohemia_triplets.jsonl", type=Path,
-                        help="Input triplets JSONL (default: %(default)s)")
-    parser.add_argument("--output", default=None, type=Path,
-                        help="Output file (default: overwrite --input)")
-    parser.add_argument("--assert-threshold", type=float, default=DEFAULT_ASSERT_THRESHOLD,
-                        metavar="F",
-                        help="Min confidence for asserted_true (default: %(default)s)")
-    parser.add_argument("--dispute-threshold", type=float, default=DEFAULT_DISPUTE_THRESHOLD,
-                        metavar="F",
-                        help="Min confidence for disputed (default: %(default)s)")
+    parser.add_argument(
+        "--input",
+        default="bohemia_triplets.jsonl",
+        type=Path,
+        help="Input triplets JSONL (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--output",
+        default=None,
+        type=Path,
+        help="Output file (default: overwrite --input)",
+    )
+    parser.add_argument(
+        "--assert-threshold",
+        type=float,
+        default=DEFAULT_ASSERT_THRESHOLD,
+        metavar="F",
+        help="Min confidence for asserted_true (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--dispute-threshold",
+        type=float,
+        default=DEFAULT_DISPUTE_THRESHOLD,
+        metavar="F",
+        help="Min confidence for disputed (default: %(default)s)",
+    )
     args = parser.parse_args()
 
     if args.assert_threshold <= args.dispute_threshold:
@@ -89,8 +106,12 @@ def main() -> None:
     after = Counter(r["truth_status"] for r in promoted)
     print(f"Before: {dict(before)}", file=sys.stderr)
     print(f"After:  {dict(after)}", file=sys.stderr)
-    changed = sum(1 for a, b in zip(records, promoted) if a["truth_status"] != b["truth_status"])
-    print(f"Changed {changed} of {len(records)} records → {output_path}", file=sys.stderr)
+    changed = sum(
+        1 for a, b in zip(records, promoted) if a["truth_status"] != b["truth_status"]
+    )
+    print(
+        f"Changed {changed} of {len(records)} records → {output_path}", file=sys.stderr
+    )
 
     with output_path.open("w", encoding="utf-8") as fh:
         for r in promoted:

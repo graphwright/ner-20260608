@@ -34,11 +34,14 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 import httpx
+from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
 
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
 except ImportError:
     pass
@@ -86,27 +89,88 @@ Rules:
 - Do not output {{}}.
 """
 
+
+# ---------------------------------------------------------------------------
+# Domain models
+# ---------------------------------------------------------------------------
+
+
+class Sentence(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    id: int
+    text: str
+
+
+class Chunk(BaseModel):
+    """A window of sentences to analyse, plus read-only context sentences
+    from before the window (for pronoun resolution only — no mentions
+    should be emitted against context sentence ids)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    context: list[Sentence]
+    sentences: list[Sentence]
+
+    @property
+    def chunk_id(self) -> str:
+        return f"{self.sentences[0].id}-{self.sentences[-1].id}"
+
+    @property
+    def valid_ids(self) -> set[int]:
+        return {s.id for s in self.sentences}
+
+
+class Mention(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    sentence_id: int
+    span: str
+    confidence: float = 1.0
+
+    @field_validator("confidence")
+    @classmethod
+    def _round_confidence(cls, v: float) -> float:
+        return round(v, 3)
+
+
+class Entity(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    label: str
+    type: str = "other"
+    mentions: list[Mention]
+
+
+class OutputRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    chunk_id: str
+    sentences: list[int]
+    entities: list[Entity]
+
+
 def resolve_model(model: str, anthropic: bool) -> str:
     if anthropic:
         return ANTHROPIC_MODEL_MAP.get(model, model)
     return model
 
 
-def load_sentences(path: Path) -> list[dict]:
+def load_sentences(path: Path) -> list[Sentence]:
     sentences = []
     with path.open(encoding="utf-8") as fh:
         for line in fh:
             line = line.strip()
             if line:
-                sentences.append(json.loads(line))
-    sentences.sort(key=lambda s: s["id"])
+                sentences.append(Sentence.model_validate_json(line))
+    sentences.sort(key=lambda s: s.id)
     return sentences
 
 
-def format_block(sentences: list[dict]) -> str:
+def format_block(sentences: list[Sentence]) -> str:
     if not sentences:
         return "(none)"
-    return "\n".join(f"[{s['id']}] {s['text']}" for s in sentences)
+    return "\n".join(f"[{s.id}] {s.text}" for s in sentences)
 
 
 def read_done_chunks(path: Path) -> set[str]:
@@ -119,7 +183,9 @@ def read_done_chunks(path: Path) -> set[str]:
             if line:
                 try:
                     done.add(json.loads(line)["chunk_id"])
-                except (json.JSONDecodeError, KeyError):
+                except KeyError:
+                    pass
+                except json.JSONDecodeError:
                     pass
     return done
 
@@ -137,7 +203,8 @@ def ollama_chat(system: str, user: str, model: str, base_url: str) -> str:
     }
     resp = httpx.post(url, json=payload, timeout=180.0)
     resp.raise_for_status()
-    return resp.json()["message"]["content"]
+    result: str = resp.json()["message"]["content"]
+    return result
 
 
 def anthropic_chat(system: str, user: str, model: str) -> str:
@@ -161,23 +228,27 @@ def anthropic_chat(system: str, user: str, model: str) -> str:
         timeout=180.0,
     )
     resp.raise_for_status()
-    return resp.json()["content"][0]["text"]
+    result: str = resp.json()["content"][0]["text"]
+    return result
 
 
-def chat(system: str, user: str, model: str, anthropic: bool, base_url: str | None) -> str:
+def chat(
+    system: str, user: str, model: str, anthropic: bool, base_url: str | None
+) -> str:
     if anthropic:
         return anthropic_chat(system, user, model)
     assert base_url is not None
     return ollama_chat(system, user, model, base_url)
 
-def extract_json_objects(raw: str) -> list[dict]:
+
+def extract_json_objects(raw: str) -> list[dict[str, Any]]:
     """
     Extract all JSON objects from raw text using JSONDecoder.raw_decode.
     This correctly handles braces inside string values, pretty-printed objects,
     and objects embedded in surrounding prose.
     """
     decoder = json.JSONDecoder()
-    objects = []
+    objects: list[dict[str, Any]] = []
     i = 0
     while i < len(raw):
         # Skip to the next '{'
@@ -194,8 +265,23 @@ def extract_json_objects(raw: str) -> list[dict]:
     return objects
 
 
-def parse_entity_response(raw: str, valid_ids: set[int]) -> list[dict]:
-    entities = []
+def _parse_mention(raw: dict[str, Any], valid_ids: set[int]) -> Mention | None:
+    try:
+        mention = Mention.model_validate(raw)
+    except ValidationError as e:
+        print(f"  [warn] bad mention ({e}): {raw}", file=sys.stderr)
+        return None
+
+    if mention.sentence_id not in valid_ids:
+        return None  # model leaked a context sentence
+    if not mention.span:
+        return None
+
+    return mention
+
+
+def parse_entity_response(raw: str, valid_ids: set[int]) -> list[Entity]:
+    entities: list[Entity] = []
 
     for obj in extract_json_objects(raw):
         # Skip empty sentinel objects the model sometimes prepends
@@ -218,31 +304,12 @@ def parse_entity_response(raw: str, valid_ids: set[int]) -> list[dict]:
         for m in mentions_raw:
             if not isinstance(m, dict):
                 continue
-            try:
-                sid = int(m["sentence_id"])
-                span = str(m["span"]).strip()
-                confidence = float(m.get("confidence", 1.0))
-            except (KeyError, ValueError, TypeError) as e:
-                print(f"  [warn] bad mention ({e}): {m}", file=sys.stderr)
-                continue
-
-            if sid not in valid_ids:
-                continue  # model leaked a context sentence
-            if not span:
-                continue
-
-            mentions.append({
-                "sentence_id": sid,
-                "span": span,
-                "confidence": round(confidence, 3),
-            })
+            mention = _parse_mention(m, valid_ids)
+            if mention is not None:
+                mentions.append(mention)
 
         if mentions:
-            entities.append({
-                "label": label,
-                "type": entity_type,
-                "mentions": mentions,
-            })
+            entities.append(Entity(label=label, type=entity_type, mentions=mentions))
 
     return entities
 
@@ -251,40 +318,37 @@ def parse_entity_response(raw: str, valid_ids: set[int]) -> list[dict]:
 # Chunking
 # ---------------------------------------------------------------------------
 
+
 def make_chunks(
-    sentences: list[dict],
+    sentences: list[Sentence],
     chunk_size: int,
     overlap: int,
-) -> list[tuple[list[dict], list[dict]]]:
+) -> list[Chunk]:
     chunks = []
     for start in range(0, len(sentences), chunk_size):
-        chunk   = sentences[start : start + chunk_size]
-        context = sentences[max(0, start - overlap) : start]
-        chunks.append((context, chunk))
+        chunk_sents = sentences[start : start + chunk_size]
+        context_sents = sentences[max(0, start - overlap) : start]
+        chunks.append(Chunk(context=context_sents, sentences=chunk_sents))
     return chunks
-
-
-def chunk_id(chunk: list[dict]) -> str:
-    return f"{chunk[0]['id']}-{chunk[-1]['id']}"
 
 
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
+
 def process_chunk(
-    context_sents: list[dict],
-    chunk_sents: list[dict],
+    chunk: Chunk,
     model: str,
     anthropic: bool,
     base_url: str | None,
     debug: bool = False,
-) -> list[dict]:
+) -> list[Entity]:
     user = USER_TMPL.format(
-        context_block=format_block(context_sents),
-        chunk_block=format_block(chunk_sents),
+        context_block=format_block(chunk.context),
+        chunk_block=format_block(chunk.sentences),
     )
-    valid_ids = {s["id"] for s in chunk_sents}
+    valid_ids = chunk.valid_ids
 
     for attempt in range(1, MAX_RETRIES + 1):
         raw = chat(SYSTEM, user, model, anthropic, base_url)
@@ -294,7 +358,10 @@ def process_chunk(
         # Non-empty objects only — {} doesn't count as a successful parse
         real_objects = [o for o in objects if o]
         if not real_objects and attempt < MAX_RETRIES:
-            print(f"  [warn] no non-empty JSON objects on attempt {attempt}/{MAX_RETRIES}", file=sys.stderr)
+            print(
+                f"  [warn] no non-empty JSON objects on attempt {attempt}/{MAX_RETRIES}",
+                file=sys.stderr,
+            )
             if not debug:
                 print(f"  [debug] raw: {raw[:300]!r}", file=sys.stderr)
             continue
@@ -303,7 +370,10 @@ def process_chunk(
             # Got entities, or valid non-empty JSON that filtered to nothing
             # (e.g. all-dialogue chunk with no resolvable entities) — both fine
             return entities
-        print(f"  [warn] all records filtered on attempt {attempt}/{MAX_RETRIES}", file=sys.stderr)
+        print(
+            f"  [warn] all records filtered on attempt {attempt}/{MAX_RETRIES}",
+            file=sys.stderr,
+        )
 
     print("  [error] all retries exhausted", file=sys.stderr)
     return []
@@ -318,8 +388,16 @@ def main() -> None:
     parser.add_argument("--anthropic", action="store_true")
     parser.add_argument("--chunk-size", type=int, default=DEFAULT_CHUNK_SIZE)
     parser.add_argument("--overlap", type=int, default=DEFAULT_OVERLAP)
-    parser.add_argument("--debug", action="store_true", help="Print full raw LLM output for every chunk")
-    parser.add_argument("--only-chunk", type=int, default=None, metavar="N", help="Process only chunk N (1-based); useful for spot inspection")
+    parser.add_argument(
+        "--debug", action="store_true", help="Print full raw LLM output for every chunk"
+    )
+    parser.add_argument(
+        "--only-chunk",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Process only chunk N (1-based); useful for spot inspection",
+    )
     args = parser.parse_args()
 
     input_path = Path(args.input)
@@ -329,30 +407,32 @@ def main() -> None:
     print(f"Loaded {len(sentences)} sentences from {input_path.name}")
 
     chunks = make_chunks(sentences, args.chunk_size, args.overlap)
-    print(f"Generated {len(chunks)} chunks (size={args.chunk_size}, overlap={args.overlap})")
+    print(
+        f"Generated {len(chunks)} chunks (size={args.chunk_size}, overlap={args.overlap})"
+    )
 
     done_chunks = read_done_chunks(output_path)
     if done_chunks:
         print(f"Resuming: {len(done_chunks)} chunks already processed")
 
     with output_path.open("a", encoding="utf-8") as out_fh:
-        for i, (context, chunk) in enumerate(chunks, 1):
+        for i, chunk in enumerate(chunks, 1):
             if args.only_chunk is not None and i != args.only_chunk:
                 continue
 
-            cid = chunk_id(chunk)
+            cid = chunk.chunk_id
             if cid in done_chunks and args.only_chunk is None:
                 print(f"  [{i}/{len(chunks)}] chunk {cid} already done, skipping")
                 continue
 
             print(
                 f"  [{i}/{len(chunks)}] chunk {cid} "
-                f"({len(chunk)} sentences, {len(context)} context) ...",
-                end=" ", flush=True,
+                f"({len(chunk.sentences)} sentences, {len(chunk.context)} context) ...",
+                end=" ",
+                flush=True,
             )
 
             entities = process_chunk(
-                context,
                 chunk,
                 args.model,
                 args.anthropic,
@@ -360,15 +440,15 @@ def main() -> None:
                 debug=args.debug,
             )
 
-            record = {
-                "chunk_id": cid,
-                "sentences": [s["id"] for s in chunk],
-                "entities": entities,
-            }
-            out_fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+            record = OutputRecord(
+                chunk_id=cid,
+                sentences=[s.id for s in chunk.sentences],
+                entities=entities,
+            )
+            out_fh.write(record.model_dump_json() + "\n")
             out_fh.flush()
 
-            mention_count = sum(len(e["mentions"]) for e in entities)
+            mention_count = sum(len(e.mentions) for e in entities)
             print(f"→ {len(entities)} entities, {mention_count} mentions")
 
     print(f"\nDone. Results in {output_path}")

@@ -1,7 +1,9 @@
 import sys
+
 from ner_20260608 import load_bohemia_graph
 
-def main():
+
+def main() -> None:
     g = load_bohemia_graph(warn=False)
     cmd = sys.argv[1] if len(sys.argv) > 1 else "help"
 
@@ -20,6 +22,7 @@ def main():
 
     else:
         print("usage: python -m ner_20260608 describe|edges-from|bfs <entity_id>...")
+
 
 if __name__ == "__main__":
     main()

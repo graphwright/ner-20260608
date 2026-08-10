@@ -49,6 +49,7 @@ import httpx
 
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
 except ImportError:
     pass  # python-dotenv not installed; rely on environment directly
@@ -58,15 +59,16 @@ except ImportError:
 # ---------------------------------------------------------------------------
 
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
-CLAUDE_MODEL      = "claude-sonnet-4-6"
-WIKI_SEARCH_URL   = "https://bakerstreet.fandom.com/api.php"
-WIKI_RATE_LIMIT   = 0.4      # seconds between wiki API calls
-MAX_RETRIES       = 3
-WIKI_JUDGE_BATCH  = 10       # entities per wiki-judgment API call
+CLAUDE_MODEL = "claude-sonnet-4-6"
+WIKI_SEARCH_URL = "https://bakerstreet.fandom.com/api.php"
+WIKI_RATE_LIMIT = 0.4  # seconds between wiki API calls
+MAX_RETRIES = 3
+WIKI_JUDGE_BATCH = 10  # entities per wiki-judgment API call
 
 # ---------------------------------------------------------------------------
 # Claude API client
 # ---------------------------------------------------------------------------
+
 
 def claude(system: str, user: str, max_tokens: int = 4096) -> str:
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
@@ -98,6 +100,7 @@ def claude(system: str, user: str, max_tokens: int = 4096) -> str:
 # JSON extraction (raw_decode scanner — same as coref.py)
 # ---------------------------------------------------------------------------
 
+
 def extract_json_objects(raw: str) -> list[dict]:
     decoder = json.JSONDecoder()
     objects = []
@@ -119,6 +122,7 @@ def extract_json_objects(raw: str) -> list[dict]:
 # ---------------------------------------------------------------------------
 # Load helpers
 # ---------------------------------------------------------------------------
+
 
 def load_coref(path: Path) -> list[dict]:
     records = []
@@ -182,7 +186,11 @@ def cluster_labels_claude(labels: list[str]) -> list[dict]:
     label_block = "\n".join(f"- {l}" for l in labels)
     user = CLUSTER_USER_TMPL.format(labels=label_block)
 
-    print(f"  Sending {len(labels)} labels to Claude for clustering ...", end=" ", flush=True)
+    print(
+        f"  Sending {len(labels)} labels to Claude for clustering ...",
+        end=" ",
+        flush=True,
+    )
 
     raw = ""
     for attempt in range(1, MAX_RETRIES + 1):
@@ -193,14 +201,14 @@ def cluster_labels_claude(labels: list[str]) -> list[dict]:
             print(f"[error attempt {attempt}: {e}]", end=" ", flush=True)
             if attempt == MAX_RETRIES:
                 raise
-            time.sleep(2 ** attempt)
+            time.sleep(2**attempt)
 
     clusters: list[dict] = []
     assigned: set[str] = set()
 
     for obj in extract_json_objects(raw):
-        canonical   = str(obj.get("canonical", "")).strip()
-        aliases     = [str(a).strip() for a in obj.get("aliases", []) if str(a).strip()]
+        canonical = str(obj.get("canonical", "")).strip()
+        aliases = [str(a).strip() for a in obj.get("aliases", []) if str(a).strip()]
         entity_type = str(obj.get("type", "other")).strip()
 
         if not canonical:
@@ -215,13 +223,17 @@ def cluster_labels_claude(labels: list[str]) -> list[dict]:
             continue
 
         assigned.update(aliases)
-        clusters.append({"canonical": canonical, "aliases": aliases, "type": entity_type})
+        clusters.append(
+            {"canonical": canonical, "aliases": aliases, "type": entity_type}
+        )
 
     # Safety net: any label Claude dropped becomes a singleton
     for label in labels:
         if label not in assigned:
-            print(f"\n  [warn] label not covered by Claude, adding singleton: {label!r}",
-                  file=sys.stderr)
+            print(
+                f"\n  [warn] label not covered by Claude, adding singleton: {label!r}",
+                file=sys.stderr,
+            )
             clusters.append({"canonical": label, "aliases": [label], "type": "other"})
 
     print(f"-> {len(clusters)} clusters")
@@ -269,9 +281,9 @@ def wiki_search_candidates(query: str) -> list[tuple[str, str]]:
         resp.raise_for_status()
         data = resp.json()
         titles = data[1] if len(data) > 1 else []
-        urls   = data[3] if len(data) > 3 else []
+        urls = data[3] if len(data) > 3 else []
         return list(zip(titles, urls))
-    except Exception as e:
+    except json.JSONDecodeError as e:
         print(f"\n  [warn] wiki search failed for {query!r}: {e}", file=sys.stderr)
         return []
 
@@ -281,13 +293,13 @@ def assign_wiki_urls_claude(clusters: list[dict]) -> list[dict]:
     For each cluster warranting a wiki lookup, fetch opensearch candidates then
     ask Claude to judge. Batches judgment calls to reduce API round-trips.
     """
-    lookup_types      = {"person", "place", "organization"}
+    lookup_types = {"person", "place", "organization"}
     provisional_counter = 1
 
     # Split clusters into those needing lookup and those that don't
-    pending:            list[dict]                          = []
-    no_lookup:          list[dict]                          = []
-    entity_candidates:  dict[str, list[tuple[str, str]]]    = {}
+    pending: list[dict] = []
+    no_lookup: list[dict] = []
+    entity_candidates: dict[str, list[tuple[str, str]]] = {}
 
     print("  Fetching wiki candidates ...")
     for cluster in clusters:
@@ -295,7 +307,7 @@ def assign_wiki_urls_claude(clusters: list[dict]) -> list[dict]:
             no_lookup.append(cluster)
             continue
 
-        canonical  = cluster["canonical"]
+        canonical = cluster["canonical"]
         candidates = wiki_search_candidates(canonical)
         time.sleep(WIKI_RATE_LIMIT)
 
@@ -303,7 +315,8 @@ def assign_wiki_urls_claude(clusters: list[dict]) -> list[dict]:
         if not candidates:
             best_alias = max(
                 (a for a in cluster["aliases"] if a != canonical),
-                key=len, default=None,
+                key=len,
+                default=None,
             )
             if best_alias:
                 candidates = wiki_search_candidates(best_alias)
@@ -314,7 +327,7 @@ def assign_wiki_urls_claude(clusters: list[dict]) -> list[dict]:
 
     # Assign provisional IDs to non-lookup types immediately
     for cluster in no_lookup:
-        cluster["wiki_url"]  = None
+        cluster["wiki_url"] = None
         cluster["entity_id"] = f"provisional:{provisional_counter}"
         provisional_counter += 1
 
@@ -326,10 +339,11 @@ def assign_wiki_urls_claude(clusters: list[dict]) -> list[dict]:
         lines = []
         for cluster in batch:
             canonical = cluster["canonical"]
-            cands     = entity_candidates.get(canonical, [])
-            cand_str  = (
+            cands = entity_candidates.get(canonical, [])
+            cand_str = (
                 "; ".join(f'"{t}" -> {u}' for t, u in cands)
-                if cands else "(no candidates found)"
+                if cands
+                else "(no candidates found)"
             )
             lines.append(f'- "{canonical}": {cand_str}')
 
@@ -338,7 +352,8 @@ def assign_wiki_urls_claude(clusters: list[dict]) -> list[dict]:
         print(
             f"  Asking Claude to judge wiki candidates "
             f"({batch_start + 1}-{batch_start + len(batch)} of {len(pending)}) ...",
-            end=" ", flush=True,
+            end=" ",
+            flush=True,
         )
 
         raw = ""
@@ -350,16 +365,18 @@ def assign_wiki_urls_claude(clusters: list[dict]) -> list[dict]:
                 print(f"[error attempt {attempt}: {e}]", end=" ", flush=True)
                 if attempt == MAX_RETRIES:
                     raise
-                time.sleep(2 ** attempt)
+                time.sleep(2**attempt)
 
         accepted = 0
         for obj in extract_json_objects(raw):
             entity = str(obj.get("entity", "")).strip()
-            url    = obj.get("wiki_url")
-            title  = obj.get("wiki_title")
+            url = obj.get("wiki_url")
+            title = obj.get("wiki_title")
             if entity:
-                resolved_url   = str(url).strip()   if url   and url   != "null" else None
-                resolved_title = str(title).strip() if title and title != "null" else None
+                resolved_url = str(url).strip() if url and url != "null" else None
+                resolved_title = (
+                    str(title).strip() if title and title != "null" else None
+                )
                 judgments[entity] = (resolved_url, resolved_title)
                 if resolved_url:
                     accepted += 1
@@ -368,15 +385,15 @@ def assign_wiki_urls_claude(clusters: list[dict]) -> list[dict]:
 
     # Apply judgments back to clusters
     for cluster in pending:
-        canonical    = cluster["canonical"]
-        url, _title  = judgments.get(canonical, (None, None))
+        canonical = cluster["canonical"]
+        url, _title = judgments.get(canonical, (None, None))
 
         if url:
             slug = url.rstrip("/").split("/wiki/")[-1]
-            cluster["wiki_url"]  = url
+            cluster["wiki_url"] = url
             cluster["entity_id"] = f"wiki:{slug}"
         else:
-            cluster["wiki_url"]  = None
+            cluster["wiki_url"] = None
             cluster["entity_id"] = f"provisional:{provisional_counter}"
             provisional_counter += 1
 
@@ -389,6 +406,7 @@ def assign_wiki_urls_claude(clusters: list[dict]) -> list[dict]:
 # Pass 3 — mention rewriting
 # ---------------------------------------------------------------------------
 
+
 def build_alias_index(clusters: list[dict]) -> dict[str, dict]:
     index: dict[str, dict] = {}
     for cluster in clusters:
@@ -399,7 +417,7 @@ def build_alias_index(clusters: list[dict]) -> dict[str, dict]:
 
 def rewrite_mentions(
     coref_records: list[dict],
-    alias_index:   dict[str, dict],
+    alias_index: dict[str, dict],
     mentions_path: Path,
 ) -> None:
     unresolved: set[str] = set()
@@ -410,31 +428,31 @@ def rewrite_mentions(
             chunk_id = rec["chunk_id"]
             for ent in rec.get("entities", []):
                 raw_label = ent.get("label", "").strip()
-                cluster   = alias_index.get(raw_label)
+                cluster = alias_index.get(raw_label)
 
                 if cluster is None:
                     unresolved.add(raw_label)
-                    entity_id   = None
-                    canonical   = raw_label
-                    wiki_url    = None
+                    entity_id = None
+                    canonical = raw_label
+                    wiki_url = None
                     entity_type = ent.get("type", "other")
                 else:
-                    entity_id   = cluster["entity_id"]
-                    canonical   = cluster["canonical"]
-                    wiki_url    = cluster["wiki_url"]
+                    entity_id = cluster["entity_id"]
+                    canonical = cluster["canonical"]
+                    wiki_url = cluster["wiki_url"]
                     entity_type = cluster["type"]
 
                 for mention in ent.get("mentions", []):
                     record = {
-                        "entity_id":   entity_id,
-                        "canonical":   canonical,
-                        "wiki_url":    wiki_url,
-                        "type":        entity_type,
-                        "raw_label":   raw_label,
+                        "entity_id": entity_id,
+                        "canonical": canonical,
+                        "wiki_url": wiki_url,
+                        "type": entity_type,
+                        "raw_label": raw_label,
                         "sentence_id": mention["sentence_id"],
-                        "span":        mention["span"],
-                        "confidence":  mention.get("confidence", 1.0),
-                        "chunk_id":    chunk_id,
+                        "span": mention["span"],
+                        "confidence": mention.get("confidence", 1.0),
+                        "chunk_id": chunk_id,
                     }
                     fh.write(json.dumps(record, ensure_ascii=False) + "\n")
                     count += 1
@@ -455,6 +473,7 @@ def rewrite_mentions(
 # Post-link deduplication
 # ---------------------------------------------------------------------------
 
+
 def dedup_by_entity_id(clusters: list[dict]) -> list[dict]:
     """
     After wiki linking, multiple clusters may resolve to the same entity_id
@@ -465,6 +484,7 @@ def dedup_by_entity_id(clusters: list[dict]) -> list[dict]:
     """
     import sys
     from collections import defaultdict
+
     groups: dict[str, list[dict]] = defaultdict(list)
     for c in clusters:
         groups[c["entity_id"]].append(c)
@@ -490,13 +510,15 @@ def dedup_by_entity_id(clusters: list[dict]) -> list[dict]:
             f"{[c['canonical'] for c in group]}",
             file=sys.stderr,
         )
-        merged.append({
-            "canonical":  best["canonical"],
-            "aliases":    all_aliases,
-            "type":       best["type"],
-            "wiki_url":   best.get("wiki_url"),
-            "entity_id":  entity_id,
-        })
+        merged.append(
+            {
+                "canonical": best["canonical"],
+                "aliases": all_aliases,
+                "type": best["type"],
+                "wiki_url": best.get("wiki_url"),
+                "entity_id": entity_id,
+            }
+        )
     return merged
 
 
@@ -504,18 +526,22 @@ def dedup_by_entity_id(clusters: list[dict]) -> list[dict]:
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Merge coref chunks -> global entity table (Claude API)"
     )
-    parser.add_argument("--coref",     required=True, help="Input: bohemia_coref.jsonl")
-    parser.add_argument("--entities",  required=True, help="Output: entity table JSONL")
-    parser.add_argument("--mentions",  required=True, help="Output: flat mention JSONL")
-    parser.add_argument("--skip-wiki", action="store_true",
-                        help="Skip wiki lookup; assign provisional IDs to all entities")
+    parser.add_argument("--coref", required=True, help="Input: bohemia_coref.jsonl")
+    parser.add_argument("--entities", required=True, help="Output: entity table JSONL")
+    parser.add_argument("--mentions", required=True, help="Output: flat mention JSONL")
+    parser.add_argument(
+        "--skip-wiki",
+        action="store_true",
+        help="Skip wiki lookup; assign provisional IDs to all entities",
+    )
     args = parser.parse_args()
 
-    coref_path    = Path(args.coref)
+    coref_path = Path(args.coref)
     entities_path = Path(args.entities)
     mentions_path = Path(args.mentions)
 
@@ -535,7 +561,7 @@ def main() -> None:
     if args.skip_wiki:
         print("  (skipped -- assigning provisional IDs to all entities)")
         for i, cluster in enumerate(clusters, 1):
-            cluster["wiki_url"]  = None
+            cluster["wiki_url"] = None
             cluster["entity_id"] = f"provisional:{i}"
     else:
         clusters = assign_wiki_urls_claude(clusters)

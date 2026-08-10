@@ -80,6 +80,7 @@ import httpx
 
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
 except ImportError:
     pass
@@ -222,6 +223,7 @@ Rules:
 - Do not output {{}}.
 """
 
+
 def resolve_model(model: str, anthropic: bool) -> str:
     if anthropic:
         return ANTHROPIC_MODEL_MAP.get(model, model)
@@ -236,7 +238,7 @@ def ollama_chat(system: str, user: str, model: str, base_url: str) -> str:
         "options": {"temperature": 0.0},
         "messages": [
             {"role": "system", "content": system},
-            {"role": "user",   "content": user},
+            {"role": "user", "content": user},
         ],
     }
     resp = httpx.post(url, json=payload, timeout=httpx.Timeout(10.0, read=360.0))
@@ -268,11 +270,14 @@ def anthropic_chat(system: str, user: str, model: str) -> str:
     return resp.json()["content"][0]["text"]
 
 
-def chat(system: str, user: str, model: str, anthropic: bool, base_url: str | None) -> str:
+def chat(
+    system: str, user: str, model: str, anthropic: bool, base_url: str | None
+) -> str:
     if anthropic:
         return anthropic_chat(system, user, model)
     assert base_url is not None
     return ollama_chat(system, user, model, base_url)
+
 
 def extract_json_objects(raw: str) -> list[dict]:
     decoder = json.JSONDecoder()
@@ -295,6 +300,7 @@ def extract_json_objects(raw: str) -> list[dict]:
 # ---------------------------------------------------------------------------
 # Load helpers
 # ---------------------------------------------------------------------------
+
 
 def load_sentences(path: Path) -> list[dict]:
     rows = []
@@ -340,15 +346,21 @@ def load_jsonl(path: Path) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 TYPE_MAP = {
-    "person":       "Person",
-    "place":        "Location",
-    "object":       "Object",
+    "person": "Person",
+    "place": "Location",
+    "object": "Object",
     "organization": "Organization",
-    "other":        "Other",
+    "other": "Other",
 }
 
-PERSONA_HINTS = {"persona", "disguise", "alias", "clergyman", "count von kramm",
-                 "nonconformist"}
+PERSONA_HINTS = {
+    "persona",
+    "disguise",
+    "alias",
+    "clergyman",
+    "count von kramm",
+    "nonconformist",
+}
 
 
 def classify_entity(rec: dict) -> str:
@@ -367,6 +379,7 @@ def classify_entity(rec: dict) -> str:
 # prompt; validate against aliases; expand back to canonical IDs on output.
 # ---------------------------------------------------------------------------
 
+
 def make_alias(name: str, schema_type: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")[:40]
     return f"{schema_type.lower()}:{slug}"
@@ -384,10 +397,14 @@ def build_alias_tables(
         alias_to_type — {alias: schema_type}                for validation
     """
     parts: dict[str, dict[str, str]] = {
-        "Person": {}, "Persona": {}, "Location": {},
-        "Object": {}, "Event":   {}, "Moment":   {},
+        "Person": {},
+        "Persona": {},
+        "Location": {},
+        "Object": {},
+        "Event": {},
+        "Moment": {},
     }
-    alias_to_id:   dict[str, str] = {}
+    alias_to_id: dict[str, str] = {}
     alias_to_type: dict[str, str] = {}
     seen: dict[str, int] = {}
 
@@ -405,29 +422,29 @@ def build_alias_tables(
         canonical = rec.get("canonical", eid)
         alias = unique(make_alias(canonical, stype))
         parts[stype][alias] = canonical
-        alias_to_id[alias]   = eid
+        alias_to_id[alias] = eid
         alias_to_type[alias] = stype
 
     for evt in events:
         alias = unique(make_alias(evt.get("description", evt["id"])[:40], "event"))
         parts["Event"][alias] = evt.get("description", evt["id"])
-        alias_to_id[alias]   = evt["id"]
+        alias_to_id[alias] = evt["id"]
         alias_to_type[alias] = "Event"
 
     for mom in moments:
         alias = unique(make_alias(mom.get("label", mom["id"])[:40], "moment"))
         parts["Moment"][alias] = mom.get("label", mom["id"])
-        alias_to_id[alias]   = mom["id"]
+        alias_to_id[alias] = mom["id"]
         alias_to_type[alias] = "Moment"
 
     return parts, alias_to_id, alias_to_type
 
 
 def filter_events_moments(
-    partitions:    dict[str, dict[str, str]],
-    alias_to_id:   dict[str, str],
-    id_to_event:   dict[str, dict],
-    id_to_moment:  dict[str, dict],
+    partitions: dict[str, dict[str, str]],
+    alias_to_id: dict[str, str],
+    id_to_event: dict[str, dict],
+    id_to_moment: dict[str, dict],
     chunk_min: int,
     chunk_max: int,
     window: int,
@@ -439,16 +456,22 @@ def filter_events_moments(
     filtered["Event"] = {
         alias: name
         for alias, name in partitions["Event"].items()
-        if any(lo <= sid <= hi
-               for sid in id_to_event.get(
-                   alias_to_id.get(alias, ""), {}).get("sentence_ids", []))
+        if any(
+            lo <= sid <= hi
+            for sid in id_to_event.get(alias_to_id.get(alias, ""), {}).get(
+                "sentence_ids", []
+            )
+        )
     }
     filtered["Moment"] = {
         alias: name
         for alias, name in partitions["Moment"].items()
-        if any(lo <= sid <= hi
-               for sid in id_to_moment.get(
-                   alias_to_id.get(alias, ""), {}).get("sentence_ids", []))
+        if any(
+            lo <= sid <= hi
+            for sid in id_to_moment.get(alias_to_id.get(alias, ""), {}).get(
+                "sentence_ids", []
+            )
+        )
     }
     return filtered
 
@@ -458,7 +481,7 @@ def format_partition(partition: dict[str, str], limit: int = 72) -> str:
         return "  (none)"
     lines = []
     for alias, name in sorted(partition.items()):
-        display = name if len(name) <= limit else name[:limit - 3] + "..."
+        display = name if len(name) <= limit else name[: limit - 3] + "..."
         lines.append(f"  {alias}  ->  {display}")
     return "\n".join(lines)
 
@@ -466,6 +489,7 @@ def format_partition(partition: dict[str, str], limit: int = 72) -> str:
 # ---------------------------------------------------------------------------
 # Content-addressed statement ID
 # ---------------------------------------------------------------------------
+
 
 def statement_id(subject_id: str, predicate: str, object_id: str) -> str:
     return f"stmt:{subject_id}:{predicate}:{object_id}"
@@ -476,19 +500,25 @@ def statement_id(subject_id: str, predicate: str, object_id: str) -> str:
 # ---------------------------------------------------------------------------
 
 VALID_PREDICATES = {
-    "AssociatedWith", "Knows", "LocatedIn", "Possesses",
-    "DisguisedAs", "HasTrueIdentity", "Involves", "OccurredAt",
+    "AssociatedWith",
+    "Knows",
+    "LocatedIn",
+    "Possesses",
+    "DisguisedAs",
+    "HasTrueIdentity",
+    "Involves",
+    "OccurredAt",
 }
 
 DOMAIN_RANGE: dict[str, tuple[set[str], set[str]]] = {
-    "AssociatedWith":  ({"Person"},   {"Location"}),
-    "Knows":           ({"Person"},   {"Person"}),
-    "LocatedIn":       ({"Location"}, {"Location"}),
-    "Possesses":       ({"Person"},   {"Object", "Document"}),
-    "DisguisedAs":     ({"Person"},   {"Persona"}),
-    "HasTrueIdentity": ({"Persona"},  {"Person"}),
-    "Involves":        ({"Event"},    {"Person", "Persona"}),
-    "OccurredAt":      ({"Event"},    {"Moment"}),
+    "AssociatedWith": ({"Person"}, {"Location"}),
+    "Knows": ({"Person"}, {"Person"}),
+    "LocatedIn": ({"Location"}, {"Location"}),
+    "Possesses": ({"Person"}, {"Object", "Document"}),
+    "DisguisedAs": ({"Person"}, {"Persona"}),
+    "HasTrueIdentity": ({"Persona"}, {"Person"}),
+    "Involves": ({"Event"}, {"Person", "Persona"}),
+    "OccurredAt": ({"Event"}, {"Moment"}),
 }
 
 
@@ -502,6 +532,7 @@ def valid_types(predicate: str, subj_type: str, obj_type: str) -> bool:
 # ---------------------------------------------------------------------------
 # Deduplication
 # ---------------------------------------------------------------------------
+
 
 class TripletRegistry:
     def __init__(self):
@@ -524,8 +555,12 @@ class TripletRegistry:
                     continue
                 try:
                     rec = json.loads(line)
-                    self._seen.add((rec["predicate"], rec["subject_id"], rec["object_id"]))
-                except (json.JSONDecodeError, KeyError):
+                    self._seen.add(
+                        (rec["predicate"], rec["subject_id"], rec["object_id"])
+                    )
+                except KeyError:
+                    pass
+                except json.JSONDecodeError:
                     pass
 
 
@@ -533,27 +568,33 @@ class TripletRegistry:
 # Record validation — aliases in, canonical IDs out
 # ---------------------------------------------------------------------------
 
+
 def validate_triplet(
-    obj:            dict,
-    valid_sids:     set[int],
-    alias_to_id:    dict[str, str],
-    alias_to_type:  dict[str, str],
-    registry:       TripletRegistry,
+    obj: dict,
+    valid_sids: set[int],
+    alias_to_id: dict[str, str],
+    alias_to_type: dict[str, str],
+    registry: TripletRegistry,
 ) -> dict | None:
 
     required = {
-        "predicate", "subject_id", "subject_type",
-        "object_id", "object_type", "sentence_ids",
-        "para", "extraction_confidence",
+        "predicate",
+        "subject_id",
+        "subject_type",
+        "object_id",
+        "object_type",
+        "sentence_ids",
+        "para",
+        "extraction_confidence",
     }
     if not required.issubset(obj.keys()):
         return None
 
-    predicate    = str(obj["predicate"]).strip()
-    subj_alias   = str(obj["subject_id"]).strip()
-    obj_alias    = str(obj["object_id"]).strip()
-    subj_type    = str(obj["subject_type"]).strip()
-    obj_type     = str(obj["object_type"]).strip()
+    predicate = str(obj["predicate"]).strip()
+    subj_alias = str(obj["subject_id"]).strip()
+    obj_alias = str(obj["object_id"]).strip()
+    subj_type = str(obj["subject_type"]).strip()
+    obj_type = str(obj["object_type"]).strip()
 
     if predicate not in VALID_PREDICATES:
         print(f"  [warn] unknown predicate: {predicate!r}", file=sys.stderr)
@@ -561,7 +602,7 @@ def validate_triplet(
 
     # Resolve aliases to canonical IDs
     subject_id = alias_to_id.get(subj_alias)
-    object_id  = alias_to_id.get(obj_alias)
+    object_id = alias_to_id.get(obj_alias)
 
     if subject_id is None:
         print(f"  [warn] unknown subject alias: {subj_alias!r}", file=sys.stderr)
@@ -573,7 +614,7 @@ def validate_triplet(
     # Use alias_to_type as ground truth for type — model's subject_type/object_type
     # fields are advisory but may be wrong; prefer what we know from the index.
     resolved_subj_type = alias_to_type.get(subj_alias, subj_type)
-    resolved_obj_type  = alias_to_type.get(obj_alias,  obj_type)
+    resolved_obj_type = alias_to_type.get(obj_alias, obj_type)
 
     if not valid_types(predicate, resolved_subj_type, resolved_obj_type):
         print(
@@ -592,7 +633,9 @@ def validate_triplet(
 
     try:
         confidence = float(obj["extraction_confidence"])
-    except (ValueError, TypeError):
+    except ValueError:
+        confidence = 0.5
+    except TypeError:
         confidence = 0.5
 
     narrator_confidence = None
@@ -600,7 +643,9 @@ def validate_triplet(
     if raw_nc is not None and str(raw_nc) != "null":
         try:
             narrator_confidence = float(raw_nc)
-        except (ValueError, TypeError):
+        except ValueError:
+            pass
+        except TypeError:
             pass
 
     # Resolve narrator alias
@@ -610,20 +655,20 @@ def validate_triplet(
         asserting_narrator_id = alias_to_id.get(str(raw_narrator).strip())
 
     return {
-        "id":                    statement_id(subject_id, predicate, object_id),
-        "predicate":             predicate,
-        "subject_id":            subject_id,
-        "subject_type":          resolved_subj_type,
-        "object_id":             object_id,
-        "object_type":           resolved_obj_type,
-        "truth_status":          "hypothetical",
-        "story_id":              STORY_ID,
-        "paragraph_index":       int(obj["para"]),
-        "sentence_ids":          sids,
+        "id": statement_id(subject_id, predicate, object_id),
+        "predicate": predicate,
+        "subject_id": subject_id,
+        "subject_type": resolved_subj_type,
+        "object_id": object_id,
+        "object_type": resolved_obj_type,
+        "truth_status": "hypothetical",
+        "story_id": STORY_ID,
+        "paragraph_index": int(obj["para"]),
+        "sentence_ids": sids,
         "asserting_narrator_id": asserting_narrator_id,
-        "extraction_method":     "llm-triplet-extraction",
+        "extraction_method": "llm-triplet-extraction",
         "extraction_confidence": round(confidence, 3),
-        "narrator_confidence":   narrator_confidence,
+        "narrator_confidence": narrator_confidence,
     }
 
 
@@ -631,10 +676,11 @@ def validate_triplet(
 # Chunking
 # ---------------------------------------------------------------------------
 
+
 def make_chunks(sentences: list[dict], chunk_size: int, overlap: int):
     chunks = []
     for start in range(0, len(sentences), chunk_size):
-        chunk   = sentences[start : start + chunk_size]
+        chunk = sentences[start : start + chunk_size]
         context = sentences[max(0, start - overlap) : start]
         chunks.append((context, chunk))
     return chunks
@@ -654,13 +700,14 @@ def chunk_id_str(chunk: list[dict]) -> str:
 # Resume support
 # ---------------------------------------------------------------------------
 
+
 def read_done_chunks(output_path: Path) -> set[str]:
     sidecar = output_path.parent / f".{output_path.stem}_progress.json"
     if not sidecar.exists():
         return set()
     try:
         return set(json.loads(sidecar.read_text()))
-    except Exception:
+    except json.JSONDecodeError:
         return set()
 
 
@@ -673,6 +720,7 @@ def mark_chunk_done(output_path: Path, cid: str, done: set[str]) -> None:
 # ---------------------------------------------------------------------------
 # Main processing
 # ---------------------------------------------------------------------------
+
 
 def process_chunk(
     context: list[dict],
@@ -688,15 +736,15 @@ def process_chunk(
 ) -> list[dict]:
 
     user = TRIPLET_USER_TMPL.format(
-        context_block   = format_block(context),
-        chunk_block     = format_block(chunk),
-        persons_block   = format_partition(partitions["Person"]),
-        personas_block  = format_partition(partitions["Persona"]),
-        locations_block = format_partition(partitions["Location"]),
-        objects_block   = format_partition(partitions["Object"]),
-        events_block    = format_partition(partitions["Event"]),
-        moments_block   = format_partition(partitions["Moment"]),
-        predicates      = PREDICATES,
+        context_block=format_block(context),
+        chunk_block=format_block(chunk),
+        persons_block=format_partition(partitions["Person"]),
+        personas_block=format_partition(partitions["Persona"]),
+        locations_block=format_partition(partitions["Location"]),
+        objects_block=format_partition(partitions["Object"]),
+        events_block=format_partition(partitions["Event"]),
+        moments_block=format_partition(partitions["Moment"]),
+        predicates=PREDICATES,
     )
 
     valid_ids = {s["id"] for s in chunk}
@@ -710,7 +758,7 @@ def process_chunk(
             print(f"[error attempt {attempt}: {e}]", end=" ", flush=True)
             if attempt == MAX_RETRIES:
                 raise
-            time.sleep(2 ** attempt)
+            time.sleep(2**attempt)
 
     if debug:
         print(f"\n  [debug] raw:\n{raw[:800]}\n", file=sys.stderr)
@@ -738,24 +786,35 @@ def main() -> None:
     parser.add_argument("--anthropic", action="store_true")
     parser.add_argument("--chunk-size", type=int, default=DEFAULT_CHUNK_SIZE)
     parser.add_argument("--overlap", type=int, default=DEFAULT_OVERLAP)
-    parser.add_argument("--event-window", type=int, default=DEFAULT_EVENT_WIN, help="Sentence radius around chunk for event/moment filtering")
-    parser.add_argument("--dump-aliases", action="store_true", help="Print the full alias table and exit")
+    parser.add_argument(
+        "--event-window",
+        type=int,
+        default=DEFAULT_EVENT_WIN,
+        help="Sentence radius around chunk for event/moment filtering",
+    )
+    parser.add_argument(
+        "--dump-aliases",
+        action="store_true",
+        help="Print the full alias table and exit",
+    )
     parser.add_argument("--debug", action="store_true")
     args = parser.parse_args()
 
     sentences_path = Path(args.sentences)
-    entities_path  = Path(args.entities)
-    events_path    = Path(args.events)
-    moments_path   = Path(args.moments)
-    output_path    = Path(args.output)
+    entities_path = Path(args.entities)
+    events_path = Path(args.events)
+    moments_path = Path(args.moments)
+    output_path = Path(args.output)
 
-    sentences    = load_sentences(sentences_path)
+    sentences = load_sentences(sentences_path)
     entity_index = load_entities(entities_path)
-    events       = load_jsonl(events_path)
-    moments      = load_jsonl(moments_path)
+    events = load_jsonl(events_path)
+    moments = load_jsonl(moments_path)
 
-    print(f"Loaded: {len(sentences)} sentences, {len(entity_index)} entities, "
-          f"{len(events)} events, {len(moments)} moments")
+    print(
+        f"Loaded: {len(sentences)} sentences, {len(entity_index)} entities, "
+        f"{len(events)} events, {len(moments)} moments"
+    )
 
     # Build alias tables
     partitions, alias_to_id, alias_to_type = build_alias_tables(
@@ -763,18 +822,20 @@ def main() -> None:
     )
 
     # Build lookup dicts for event/moment window filtering
-    id_to_event  = {e["id"]: e for e in events}
+    id_to_event = {e["id"]: e for e in events}
     id_to_moment = {m["id"]: m for m in moments}
 
-    all_alias_ids = set(alias_to_id.keys())
+    set(alias_to_id.keys())
 
-    print(f"Alias index: "
-          f"{len(partitions['Person'])} persons, "
-          f"{len(partitions['Persona'])} personas, "
-          f"{len(partitions['Location'])} locations, "
-          f"{len(partitions['Object'])} objects, "
-          f"{len(partitions['Event'])} events, "
-          f"{len(partitions['Moment'])} moments")
+    print(
+        f"Alias index: "
+        f"{len(partitions['Person'])} persons, "
+        f"{len(partitions['Persona'])} personas, "
+        f"{len(partitions['Location'])} locations, "
+        f"{len(partitions['Object'])} objects, "
+        f"{len(partitions['Event'])} events, "
+        f"{len(partitions['Moment'])} moments"
+    )
 
     if args.dump_aliases:
         for stype, entries in partitions.items():
@@ -788,9 +849,11 @@ def main() -> None:
     registry.load_existing(output_path)
 
     chunks = make_chunks(sentences, args.chunk_size, args.overlap)
-    print(f"Generated {len(chunks)} chunks "
-          f"(size={args.chunk_size}, overlap={args.overlap}, "
-          f"event-window=+/-{args.event_window})")
+    print(
+        f"Generated {len(chunks)} chunks "
+        f"(size={args.chunk_size}, overlap={args.overlap}, "
+        f"event-window=+/-{args.event_window})"
+    )
 
     done_chunks = read_done_chunks(output_path)
     if done_chunks:
@@ -810,9 +873,13 @@ def main() -> None:
 
             # Filter events/moments to window around this chunk
             local_partitions = filter_events_moments(
-                partitions, alias_to_id,
-                id_to_event, id_to_moment,
-                chunk_min, chunk_max, args.event_window,
+                partitions,
+                alias_to_id,
+                id_to_event,
+                id_to_moment,
+                chunk_min,
+                chunk_max,
+                args.event_window,
             )
 
             print(
@@ -820,7 +887,8 @@ def main() -> None:
                 f"({len(chunk)} sents, {len(context)} ctx, "
                 f"{len(local_partitions['Event'])} evts, "
                 f"{len(local_partitions['Moment'])} moms) ...",
-                end=" ", flush=True,
+                end=" ",
+                flush=True,
             )
 
             triplets = process_chunk(

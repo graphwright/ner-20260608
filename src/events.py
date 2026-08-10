@@ -70,6 +70,7 @@ import httpx
 
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
 except ImportError:
     pass
@@ -167,6 +168,7 @@ Rules:
 - Do not output {{}}.
 """
 
+
 def resolve_model(model: str) -> str:
     return ANTHROPIC_MODEL_MAP.get(model, model)
 
@@ -199,6 +201,7 @@ def claude(system: str, user: str, model: str, max_tokens: int = 4096) -> str:
 # JSON extraction
 # ---------------------------------------------------------------------------
 
+
 def extract_json_objects(raw: str) -> list[dict]:
     decoder = json.JSONDecoder()
     objects = []
@@ -220,6 +223,7 @@ def extract_json_objects(raw: str) -> list[dict]:
 # ---------------------------------------------------------------------------
 # Load helpers
 # ---------------------------------------------------------------------------
+
 
 def load_sentences(path: Path) -> list[dict]:
     rows = []
@@ -244,13 +248,13 @@ def load_entities(path: Path) -> dict[str, str]:
             if not line:
                 continue
             rec = json.loads(line)
-            raw_id    = rec.get("entity_id", "")
+            raw_id = rec.get("entity_id", "")
             canonical = rec.get("canonical", "")
             if not raw_id or not canonical:
                 continue
             # Expand wiki: slug → full URI
             if raw_id.startswith("wiki:"):
-                slug   = raw_id[len("wiki:"):]
+                slug = raw_id[len("wiki:") :]
                 full_id = f"{WIKI_BASE}{slug}"
             else:
                 full_id = raw_id
@@ -266,6 +270,7 @@ def format_entity_index(index: dict[str, str]) -> str:
 # ---------------------------------------------------------------------------
 # Slug registry — ensures uniqueness within a run
 # ---------------------------------------------------------------------------
+
 
 class SlugRegistry:
     def __init__(self):
@@ -287,21 +292,28 @@ class SlugRegistry:
         return slug in self._seen
 
 
-event_slugs   = SlugRegistry()
-moment_slugs  = SlugRegistry()
+event_slugs = SlugRegistry()
+moment_slugs = SlugRegistry()
 
 
 # ---------------------------------------------------------------------------
 # Record validation
 # ---------------------------------------------------------------------------
 
-_SLUG_RE = re.compile(r'^sib:(event|moment):[a-z][a-z0-9_]*$')
+_SLUG_RE = re.compile(r"^sib:(event|moment):[a-z][a-z0-9_]*$")
 
 
-def validate_event(obj: dict, valid_sentence_ids: set[int],
-                   entity_index: dict[str, str]) -> dict | None:
-    required = {"id", "description", "sentence_ids", "para",
-                "participants", "extraction_confidence"}
+def validate_event(
+    obj: dict, valid_sentence_ids: set[int], entity_index: dict[str, str]
+) -> dict | None:
+    required = {
+        "id",
+        "description",
+        "sentence_ids",
+        "para",
+        "participants",
+        "extraction_confidence",
+    }
     if not required.issubset(obj.keys()):
         print(f"  [warn] event missing fields: {obj}", file=sys.stderr)
         return None
@@ -312,7 +324,7 @@ def validate_event(obj: dict, valid_sentence_ids: set[int],
         return None
 
     # Deduplicate slug
-    slug = eid[len("sib:event:"):]
+    eid[len("sib:event:") :]
     if event_slugs.seen(eid):
         # Already emitted this event — skip (cross-chunk dedup)
         return None
@@ -329,29 +341,42 @@ def validate_event(obj: dict, valid_sentence_ids: set[int],
     participants = [p for p in raw_participants if p in entity_index]
     unknown = set(raw_participants) - set(participants)
     if unknown:
-        print(f"  [warn] event {eid} unknown participants dropped: {unknown}",
-              file=sys.stderr)
+        print(
+            f"  [warn] event {eid} unknown participants dropped: {unknown}",
+            file=sys.stderr,
+        )
 
     try:
         confidence = float(obj["extraction_confidence"])
-    except (ValueError, TypeError):
+    except ValueError:
+        confidence = 0.5
+    except TypeError:
         confidence = 0.5
 
     return {
-        "id":                   eid,
-        "description":          str(obj["description"]).strip(),
-        "sentence_ids":         sids,
-        "para":                 int(obj["para"]),
-        "participants":         participants,
+        "id": eid,
+        "description": str(obj["description"]).strip(),
+        "sentence_ids": sids,
+        "para": int(obj["para"]),
+        "participants": participants,
         "extraction_confidence": round(confidence, 3),
     }
 
 
-def validate_moment(obj: dict, valid_sentence_ids: set[int],
-                    entity_index: dict[str, str],
-                    known_event_ids: set[str]) -> dict | None:
-    required = {"id", "label", "event_id", "narrator_id",
-                "sentence_ids", "extraction_confidence"}
+def validate_moment(
+    obj: dict,
+    valid_sentence_ids: set[int],
+    entity_index: dict[str, str],
+    known_event_ids: set[str],
+) -> dict | None:
+    required = {
+        "id",
+        "label",
+        "event_id",
+        "narrator_id",
+        "sentence_ids",
+        "extraction_confidence",
+    }
     if not required.issubset(obj.keys()):
         print(f"  [warn] moment missing fields: {obj}", file=sys.stderr)
         return None
@@ -388,20 +413,24 @@ def validate_moment(obj: dict, valid_sentence_ids: set[int],
         if raw_narrator in entity_index:
             narrator_id = raw_narrator
         else:
-            print(f"  [warn] moment {mid} unknown narrator_id: {raw_narrator!r}",
-                  file=sys.stderr)
+            print(
+                f"  [warn] moment {mid} unknown narrator_id: {raw_narrator!r}",
+                file=sys.stderr,
+            )
 
     try:
         confidence = float(obj["extraction_confidence"])
-    except (ValueError, TypeError):
+    except ValueError:
+        confidence = 0.5
+    except TypeError:
         confidence = 0.5
 
     return {
-        "id":                   mid,
-        "label":                str(obj["label"]).strip(),
-        "event_id":             event_id,
-        "narrator_id":          narrator_id,
-        "sentence_ids":         sids,
+        "id": mid,
+        "label": str(obj["label"]).strip(),
+        "event_id": event_id,
+        "narrator_id": narrator_id,
+        "sentence_ids": sids,
         "extraction_confidence": round(confidence, 3),
     }
 
@@ -410,6 +439,7 @@ def validate_moment(obj: dict, valid_sentence_ids: set[int],
 # Chunking
 # ---------------------------------------------------------------------------
 
+
 def make_chunks(
     sentences: list[dict],
     chunk_size: int,
@@ -417,7 +447,7 @@ def make_chunks(
 ) -> list[tuple[list[dict], list[dict]]]:
     chunks = []
     for start in range(0, len(sentences), chunk_size):
-        chunk   = sentences[start : start + chunk_size]
+        chunk = sentences[start : start + chunk_size]
         context = sentences[max(0, start - overlap) : start]
         chunks.append((context, chunk))
     return chunks
@@ -437,6 +467,7 @@ def chunk_id(chunk: list[dict]) -> str:
 # Resume helpers
 # ---------------------------------------------------------------------------
 
+
 def read_done_chunks(events_path: Path, moments_path: Path) -> set[str]:
     """
     We use a sidecar file to track which chunk_ids have been processed,
@@ -447,7 +478,7 @@ def read_done_chunks(events_path: Path, moments_path: Path) -> set[str]:
         return set()
     try:
         return set(json.loads(sidecar.read_text()))
-    except Exception:
+    except json.JSONDecodeError:
         return set()
 
 
@@ -461,7 +492,14 @@ def mark_chunk_done(events_path: Path, chunk_id_str: str, done: set[str]) -> Non
 # Main processing
 # ---------------------------------------------------------------------------
 
-def process_chunk(context: list[dict], chunk: list[dict], entity_index: dict[str, str], known_event_ids: set[str], model: str) -> tuple[list[dict], list[dict]]:
+
+def process_chunk(
+    context: list[dict],
+    chunk: list[dict],
+    entity_index: dict[str, str],
+    known_event_ids: set[str],
+    model: str,
+) -> tuple[list[dict], list[dict]]:
     user = EVENT_USER_TMPL.format(
         context_block=format_block(context),
         chunk_block=format_block(chunk),
@@ -477,9 +515,9 @@ def process_chunk(context: list[dict], chunk: list[dict], entity_index: dict[str
             print(f"[error attempt {attempt}: {e}]", end=" ", flush=True)
             if attempt == MAX_RETRIES:
                 raise
-            time.sleep(2 ** attempt)
+            time.sleep(2**attempt)
 
-    events:  list[dict] = []
+    events: list[dict] = []
     moments: list[dict] = []
 
     for obj in extract_json_objects(raw):
@@ -498,14 +536,18 @@ def process_chunk(context: list[dict], chunk: list[dict], entity_index: dict[str
 
         else:
             if obj:  # non-empty but unrecognised record_type
-                print(f"  [warn] unknown record_type: {obj.get('record_type')!r}",
-                      file=sys.stderr)
+                print(
+                    f"  [warn] unknown record_type: {obj.get('record_type')!r}",
+                    file=sys.stderr,
+                )
 
     return events, moments
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Extract events and moments from sentencized Holmes story (Claude API)")
+    parser = argparse.ArgumentParser(
+        description="Extract events and moments from sentencized Holmes story (Claude API)"
+    )
     parser.add_argument("--sentences", required=True)
     parser.add_argument("--entities", required=True)
     parser.add_argument("--events", required=True)
@@ -521,14 +563,16 @@ def main() -> None:
     events_path = Path(args.events)
     moments_path = Path(args.moments)
 
-    sentences    = load_sentences(sentences_path)
+    sentences = load_sentences(sentences_path)
     entity_index = load_entities(entities_path)
     print(f"Loaded {len(sentences)} sentences, {len(entity_index)} entities")
 
     chunks = make_chunks(sentences, args.chunk_size, args.overlap)
-    print(f"Generated {len(chunks)} chunks (size={args.chunk_size}, overlap={args.overlap})")
+    print(
+        f"Generated {len(chunks)} chunks (size={args.chunk_size}, overlap={args.overlap})"
+    )
 
-    done_chunks     = read_done_chunks(events_path, moments_path)
+    done_chunks = read_done_chunks(events_path, moments_path)
     known_event_ids: set[str] = set()
 
     # Pre-populate known_event_ids from any existing output (resume case)
@@ -541,7 +585,7 @@ def main() -> None:
                         rec = json.loads(line)
                         known_event_ids.add(rec["id"])
                         event_slugs.register(rec["id"])
-                    except Exception:
+                    except json.JSONDecodeError:
                         pass
     if moments_path.exists():
         with moments_path.open(encoding="utf-8") as fh:
@@ -551,7 +595,7 @@ def main() -> None:
                     try:
                         rec = json.loads(line)
                         moment_slugs.register(rec["id"])
-                    except Exception:
+                    except json.JSONDecodeError:
                         pass
 
     if done_chunks:
@@ -560,7 +604,7 @@ def main() -> None:
     total_events = total_moments = 0
 
     with (
-        events_path.open("a",  encoding="utf-8") as evt_fh,
+        events_path.open("a", encoding="utf-8") as evt_fh,
         moments_path.open("a", encoding="utf-8") as mom_fh,
     ):
         for i, (context, chunk) in enumerate(chunks, 1):
@@ -572,14 +616,19 @@ def main() -> None:
             print(
                 f"  [{i:>3}/{len(chunks)}] chunk {cid} "
                 f"({len(chunk)} sentences, {len(context)} context) ...",
-                end=" ", flush=True,
+                end=" ",
+                flush=True,
             )
 
-            events, moments = process_chunk(context, chunk, entity_index, known_event_ids, args.model)
+            events, moments = process_chunk(
+                context, chunk, entity_index, known_event_ids, args.model
+            )
 
             if args.debug and not events and not moments:
-                print(f"\n  [debug] no records extracted from chunk {cid}",
-                      file=sys.stderr)
+                print(
+                    f"\n  [debug] no records extracted from chunk {cid}",
+                    file=sys.stderr,
+                )
 
             for rec in events:
                 evt_fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
@@ -589,13 +638,13 @@ def main() -> None:
             evt_fh.flush()
             mom_fh.flush()
 
-            total_events  += len(events)
+            total_events += len(events)
             total_moments += len(moments)
             mark_chunk_done(events_path, cid, done_chunks)
 
             print(f"→ {len(events)} events, {len(moments)} moments")
 
-    print(f"\nDone.")
+    print("\nDone.")
     print(f"  Events  : {total_events:>4}  → {events_path}")
     print(f"  Moments : {total_moments:>4}  → {moments_path}")
 

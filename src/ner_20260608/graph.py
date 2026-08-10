@@ -12,10 +12,12 @@ Typical usage:
 """
 
 from __future__ import annotations
+
 import warnings
 from collections import defaultdict
-from typing import Iterable
-
+from collections.abc import Iterable
+from types import ModuleType
+from typing import Any, Protocol, TypeGuard
 
 """
 ## Helpers
@@ -30,18 +32,37 @@ indexed correctly.
 _WIKI_PREFIX = "https://bakerstreet.fandom.com/wiki/"
 
 
+class _HasId(Protocol):
+    id: str
+
+
+class _StatementLike(_HasId, Protocol):
+    subject: _HasId
+    object_: _HasId
+    truth_status: object
+
+
 def _canonicalize_id(entity_id: str) -> str:
     if entity_id.startswith(_WIKI_PREFIX):
-        return "wiki:" + entity_id[len(_WIKI_PREFIX):]
+        return "wiki:" + entity_id[len(_WIKI_PREFIX) :]
     return entity_id
 
 
-def _is_entity(obj):
-    return hasattr(obj, 'id') and not callable(obj)
+def _is_entity(obj: object) -> TypeGuard[_HasId]:
+    return hasattr(obj, "id") and not callable(obj)
 
 
-def _is_statement(obj):
-    return hasattr(obj, 'subject') and hasattr(obj, 'object_') and hasattr(obj, 'truth_status')
+def _is_statement(obj: object) -> TypeGuard[_StatementLike]:
+    return (
+        hasattr(obj, "subject")
+        and hasattr(obj, "object_")
+        and hasattr(obj, "truth_status")
+    )
+
+
+def _truth_value(stmt: _StatementLike) -> str:
+    value = getattr(stmt, "truth_status", "hypothetical")
+    return str(getattr(value, "value", value))
 
 
 """
@@ -59,11 +80,10 @@ subject or object of higher-order predicates.
 
 
 class Graph:
-
-    def __init__(self, instances: Iterable):
-        self.by_id: dict = {}
-        self.out_edges: dict[str, list] = defaultdict(list)   # subject.id -> [stmt]
-        self.in_edges: dict[str, list] = defaultdict(list)    # object_.id -> [stmt]
+    def __init__(self, instances: Iterable[object]):
+        self.by_id: dict[str, _HasId] = {}
+        self.out_edges: dict[str, list[_StatementLike]] = defaultdict(list)
+        self.in_edges: dict[str, list[_StatementLike]] = defaultdict(list)
 
         for inst in instances:
             if not _is_entity(inst):
@@ -80,38 +100,59 @@ class Graph:
                 self.in_edges[inst.object_.id].append(inst)
 
     @classmethod
-    def from_module(cls, module) -> "Graph":
+    def from_module(cls, module: ModuleType) -> Graph:
         """Build a Graph from all EntityInstance values in a module's namespace."""
         return cls(
-            v for v in vars(module).values()
+            v
+            for v in vars(module).values()
             if _is_entity(v) and not isinstance(v, type)
         )
 
-    def get(self, entity_id: str):
+    def get(self, entity_id: str) -> _HasId | None:
         """Return the instance for entity_id, normalizing wiki URLs to canonical form."""
         return self.by_id.get(_canonicalize_id(entity_id))
 
-    def edges_from(self, entity_id: str, pred_type=None, truth=None) -> list:
+    def edges_from(
+        self,
+        entity_id: str,
+        pred_type: type[Any] | None = None,
+        truth: str | Iterable[str] | None = None,
+    ) -> list[_StatementLike]:
         """Outward edges from entity_id, optionally filtered by type and truth_status."""
         edges = self.out_edges.get(_canonicalize_id(entity_id), [])
         if pred_type:
             edges = [e for e in edges if isinstance(e, pred_type)]
         if truth:
-            truth_set = {truth} if not isinstance(truth, (set, list, tuple)) else set(truth)
-            edges = [e for e in edges if e.truth_status.value in truth_set or e.truth_status in truth_set]
+            truth_set = (
+                {truth} if not isinstance(truth, (set, list, tuple)) else set(truth)
+            )
+            edges = [e for e in edges if _truth_value(e) in truth_set]
         return edges
 
-    def edges_to(self, entity_id: str, pred_type=None, truth=None) -> list:
+    def edges_to(
+        self,
+        entity_id: str,
+        pred_type: type[Any] | None = None,
+        truth: str | Iterable[str] | None = None,
+    ) -> list[_StatementLike]:
         """Inward edges to entity_id, optionally filtered by type and truth_status."""
         edges = self.in_edges.get(_canonicalize_id(entity_id), [])
         if pred_type:
             edges = [e for e in edges if isinstance(e, pred_type)]
         if truth:
-            truth_set = {truth} if not isinstance(truth, (set, list, tuple)) else set(truth)
-            edges = [e for e in edges if e.truth_status.value in truth_set or e.truth_status in truth_set]
+            truth_set = (
+                {truth} if not isinstance(truth, (set, list, tuple)) else set(truth)
+            )
+            edges = [e for e in edges if _truth_value(e) in truth_set]
         return edges
 
-    def bfs(self, seed_ids: list[str], max_hops: int = 3, pred_types=None, truth_values=('asserted_true',)) -> list[set[str]]:
+    def bfs(
+        self,
+        seed_ids: list[str],
+        max_hops: int = 3,
+        pred_types: Iterable[type[Any]] | None = None,
+        truth_values: tuple[str, ...] = ("asserted_true",),
+    ) -> list[set[str]]:
         """BFS from seed_ids. Returns one set per hop layer.
 
         Traverses both outward and inward edges so symmetric predicates (e.g.
@@ -130,7 +171,7 @@ class Graph:
                 for edge in self.out_edges.get(eid, []):
                     if pred_types and not isinstance(edge, tuple(pred_types)):
                         continue
-                    if edge.truth_status.value not in truth_values:
+                    if _truth_value(edge) not in truth_values:
                         continue
                     for nid in (edge.object_.id, edge.id):
                         if nid not in visited:
@@ -139,7 +180,7 @@ class Graph:
                 for edge in self.in_edges.get(eid, []):
                     if pred_types and not isinstance(edge, tuple(pred_types)):
                         continue
-                    if edge.truth_status.value not in truth_values:
+                    if _truth_value(edge) not in truth_values:
                         continue
                     for nid in (edge.subject.id, edge.id):
                         if nid not in visited:
@@ -152,7 +193,12 @@ class Graph:
 
         return layers
 
-    def transitive_closure(self, entity_id: str, pred_type, truth_values=('asserted_true',)) -> set[str]:
+    def transitive_closure(
+        self,
+        entity_id: str,
+        pred_type: type[Any],
+        truth_values: tuple[str, ...] = ("asserted_true",),
+    ) -> set[str]:
         """All entities reachable from entity_id by following pred_type transitively."""
         visited: set[str] = set()
         frontier: set[str] = {entity_id}
@@ -162,7 +208,7 @@ class Graph:
                 for edge in self.out_edges.get(eid, []):
                     if not isinstance(edge, pred_type):
                         continue
-                    if edge.truth_status.value not in truth_values:
+                    if _truth_value(edge) not in truth_values:
                         continue
                     obj_id = edge.object_.id
                     if obj_id not in visited:
@@ -178,7 +224,7 @@ class Graph:
             return f"<not found: {entity_id}>"
         return str(inst)
 
-    def print_edges(self, edges: list, indent: int = 2) -> None:
-        pad = ' ' * indent
+    def print_edges(self, edges: Iterable[_StatementLike], indent: int = 2) -> None:
+        pad = " " * indent
         for e in edges:
-            print(f"{pad}{e}  [{e.truth_status.value}]")
+            print(f"{pad}{e}  [{_truth_value(e)}]")
