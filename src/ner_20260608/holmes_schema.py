@@ -10,7 +10,7 @@ from typing import ClassVar, TypeVar
 
 from pydantic import BaseModel, ConfigDict
 
-from base import (
+from tg_core.base import (
     AnyStatement,
     AnyStmt,
     BaseStatement,

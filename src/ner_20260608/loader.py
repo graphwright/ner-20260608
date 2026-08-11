@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any, cast, get_origin, get_type_hints
 
 from pydantic import ValidationError
 
-from base import BaseStatement, Instance
+from tg_core.base import BaseStatement, Instance
 
 from . import holmes_schema as _schema
 from .holmes_schema import (

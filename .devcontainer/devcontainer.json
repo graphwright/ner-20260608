@@ -1,3 +1,12 @@
-{
-  "postCreateCommand": "npm install -g @anthropic-ai/claude-code"
-}
+  {
+    "postCreateCommand": "npm install -g @anthropic-ai/claude-code",
+    "customizations": {
+      "codespaces": {
+        "repositories": {
+          "graphwright/tg-core": {
+            "permissions": { "contents": "write", "pull_requests": "write" }
+          }
+        }
+      }
+    }
+  }

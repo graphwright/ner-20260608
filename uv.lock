@@ -181,6 +181,14 @@ wheels = [
 ]
 
 [[package]]
+name = "inf-typed-graph"
+version = "0.1.0"
+source = { git = "https://github.com/graphwright/tg-core?rev=main#96cc9d61987183d174e8a07be2fa78dde06672a1" }
+dependencies = [
+    { name = "pydantic" },
+]
+
+[[package]]
 name = "iniconfig"
 version = "2.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -306,6 +314,7 @@ source = { editable = "." }
 dependencies = [
     { name = "dotenv" },
     { name = "httpx" },
+    { name = "inf-typed-graph" },
     { name = "mypy" },
     { name = "pydantic" },
     { name = "python-dotenv" },
@@ -321,6 +330,7 @@ dev = [
 requires-dist = [
     { name = "dotenv", specifier = ">=0.9.9" },
     { name = "httpx", specifier = ">=0.28.1" },
+    { name = "inf-typed-graph", git = "https://github.com/graphwright/tg-core?rev=main" },
     { name = "mypy", specifier = ">=2.3.0" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "python-dotenv", specifier = ">=1.2.2" },

@@ -1,6 +1,6 @@
 """Tests for the packaged Holmes schema (current model)."""
 
-from base import Symmetric, Transitive
+from tg_core.base import Symmetric, Transitive
 from ner_20260608.holmes_schema import (
     AssociatedWith,
     Contradicts,
